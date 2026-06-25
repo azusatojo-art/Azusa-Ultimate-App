@@ -572,12 +572,20 @@
     <!-- このタスクのメモ -->
     <textarea id="task-memo-input" oninput="onTaskMemoInput(this.value)" placeholder="📝 このタスクのメモ（何やった・反省・感想…）" style="width:100%;min-height:42px;border:0.5px solid var(--border2);border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.6;background:var(--bg2);color:var(--text);margin-bottom:12px;resize:vertical;font-family:inherit"></textarea>
 
-    <!-- ポモを1セットずつ追加 -->
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-      <span style="font-size:12px;color:var(--text3);flex-shrink:0">🍅 ポモ追加</span>
-      <button id="pomo-mode-40" onclick="setPomoMode(40)" style="padding:6px 12px;border-radius:8px;border:0.5px solid var(--border2);background:var(--bg2);color:var(--text2);font-size:12px;font-weight:600;cursor:pointer">40分+休8</button>
-      <button id="pomo-mode-25" onclick="setPomoMode(25)" style="padding:6px 12px;border-radius:8px;border:0.5px solid var(--border2);background:var(--bg2);color:var(--text2);font-size:12px;font-weight:600;cursor:pointer">25分+休5</button>
-      <button onclick="addPomoSet()" style="flex:1;min-width:120px;padding:7px 12px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:12px;font-weight:700;cursor:pointer">＋ 1セット追加</button>
+    <!-- ポモを追加（セット数を決めて一気に。足りなきゃまた追加） -->
+    <div style="border:0.5px solid var(--border2);border-radius:10px;padding:10px 12px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        <span style="font-size:12px;color:var(--text3);flex-shrink:0">🍅 ポモ追加</span>
+        <button id="pomo-mode-40" onclick="setPomoMode(40)" style="padding:6px 12px;border-radius:8px;border:0.5px solid var(--border2);background:var(--bg2);color:var(--text2);font-size:12px;font-weight:600;cursor:pointer">40分+休8</button>
+        <button id="pomo-mode-25" onclick="setPomoMode(25)" style="padding:6px 12px;border-radius:8px;border:0.5px solid var(--border2);background:var(--bg2);color:var(--text2);font-size:12px;font-weight:600;cursor:pointer">25分+休5</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:12px;color:var(--text3);flex-shrink:0;margin-right:2px">何セット?</span>
+        <button onclick="addPomoSet(1)" style="flex:1;padding:8px;border-radius:8px;border:0.5px solid var(--accent);background:var(--bg2);color:var(--accent);font-size:13px;font-weight:700;cursor:pointer">＋1</button>
+        <button onclick="addPomoSet(2)" style="flex:1;padding:8px;border-radius:8px;border:0.5px solid var(--accent);background:var(--bg2);color:var(--accent);font-size:13px;font-weight:700;cursor:pointer">＋2</button>
+        <button onclick="addPomoSet(3)" style="flex:1;padding:8px;border-radius:8px;border:0.5px solid var(--accent);background:var(--bg2);color:var(--accent);font-size:13px;font-weight:700;cursor:pointer">＋3</button>
+        <button onclick="addPomoSet(4)" style="flex:1;padding:8px;border-radius:8px;border:0.5px solid var(--accent);background:var(--bg2);color:var(--accent);font-size:13px;font-weight:700;cursor:pointer">＋4</button>
+      </div>
     </div>
 
     <!-- 全体終了時間 -->
@@ -2451,7 +2459,8 @@ function updatePomoModeBtns() {
   (pomoMode===40?on:off)(b40);
   (pomoMode===25?on:off)(b25);
 }
-function addPomoSet() {
+function addPomoSet(count) {
+  count = Math.max(1, count || 1);
   var rid = timerState.routineId;
   var r = routines.find(function(x){ return x.id === rid; });
   if (!r) return;
@@ -2460,13 +2469,17 @@ function addPomoSet() {
   var extras = getTodayExtraTasks(rid);
   var baseOrig = r.tasks.length + extras.length; // allTasks(=r.tasks+extras) 内の新タスクの位置
   var stamp = Date.now();
-  extras.push({ id:'pomo_'+stamp+'_f', name:'集中 '+focusMin+'分', duration:focusMin, todayOnly:true, note:'ポモドーロ' });
-  extras.push({ id:'pomo_'+stamp+'_b', name:'休憩 '+breakMin+'分', duration:breakMin, todayOnly:true, note:'休憩タスクを選んでね' });
+  var newOrigs = [];
+  for (var i = 0; i < count; i++) {
+    extras.push({ id:'pomo_'+stamp+'_'+i+'_f', name:'集中 '+focusMin+'分', duration:focusMin, todayOnly:true, note:'ポモドーロ' });
+    extras.push({ id:'pomo_'+stamp+'_'+i+'_b', name:'休憩 '+breakMin+'分', duration:breakMin, todayOnly:true, note:'休憩タスクを選んでね' });
+    newOrigs.push(baseOrig + i*2, baseOrig + i*2 + 1);
+  }
   localStorage.setItem(key, JSON.stringify(extras));
-  // いまの並びの「今のタスクの直後」に挿入する
+  // いまの並びの「今のタスクの直後」に、選んだセット数ぶんまとめて挿入
   var orderOrigs = (timerState.orderedTasks || getOrderedTasks(rid)).map(function(e){ return e.origIndex; });
   var pos = (typeof timerState.taskIndex === 'number' && timerState.taskIndex >= 0) ? timerState.taskIndex : orderOrigs.length - 1;
-  orderOrigs.splice(pos + 1, 0, baseOrig, baseOrig + 1);
+  Array.prototype.splice.apply(orderOrigs, [pos + 1, 0].concat(newOrigs));
   saveTodayTaskOrder(rid, orderOrigs);
   timerState.orderedTasks = getOrderedTasks(rid);
   // 表示更新（次へ・一覧・終了予定）
@@ -2475,7 +2488,7 @@ function addPomoSet() {
   if (nm) nm.textContent = (next && next.task) ? next.task.name : 'ルーティン終了！';
   if (typeof renderMiniList === 'function') renderMiniList();
   if (typeof updateTimerDisplay === 'function') updateTimerDisplay();
-  speak('ポモを1セット追加したよ');
+  speak('ポモを' + count + 'セット追加したよ');
 }
 
 function completeTask() {
