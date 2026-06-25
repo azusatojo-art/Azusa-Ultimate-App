@@ -4559,9 +4559,21 @@ function syncToCloud() {
     var data = getAllLocalData();
     // 空データでクラウドを上書きしない（消えたように見える事故の防止）
     if (Object.keys(data).length === 0) return;
-    supaFetch('POST', { user_id: USER_ID, data: data, updated_at: new Date().toISOString() })
-      .then(function(r) { if (r.ok) lastSyncTime = Date.now(); })
-      .catch(function(e) { console.log('Sync failed:', e); });
+    var updatedAt = new Date().toISOString();
+    // 既存行は PATCH で更新する（POST の upsert が効かず2回目以降の保存が失敗していたため）。
+    // 行がまだ無ければ POST で新規作成にフォールバック。
+    fetch(SUPA_URL + '/rest/v1/user_data?user_id=eq.' + USER_ID, {
+      method: 'PATCH',
+      headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+      body: JSON.stringify({ data: data, updated_at: updatedAt })
+    }).then(function(r) {
+      return r.json().then(function(rows) { return { ok: r.ok, rows: rows }; }, function() { return { ok: r.ok, rows: null }; });
+    }).then(function(res) {
+      if (res.ok && res.rows && res.rows.length > 0) { lastSyncTime = Date.now(); return; }
+      // 該当行が無い → 新規作成
+      return supaFetch('POST', { user_id: USER_ID, data: data, updated_at: updatedAt })
+        .then(function(r2) { if (r2.ok) lastSyncTime = Date.now(); });
+    }).catch(function(e) { console.log('Sync failed:', e); });
   }, 2000);
 }
 
