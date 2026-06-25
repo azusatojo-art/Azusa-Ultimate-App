@@ -869,7 +869,7 @@
       <input id="food-menu-input" placeholder="例：サラダチキン、玄米、味噌汁..." style="width:100%;border:0.5px solid var(--border2);border-radius:8px;padding:10px 12px;font-size:14px;background:var(--bg2);color:var(--text)">
     </div>
     <div style="margin-bottom:16px">
-      <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px">写真（複数OK）</div>
+      <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px">写真（任意・複数OK）</div>
       <div id="food-photos-preview" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"></div>
       <div style="display:flex;gap:8px">
         <button onclick="document.getElementById('food-photo-camera').click()" style="flex:1;padding:9px;border-radius:8px;border:0.5px solid var(--border2);background:var(--bg2);color:var(--text);font-size:13px;font-weight:600;cursor:pointer">📷 カメラ</button>
@@ -3737,7 +3737,7 @@ function openFoodLog(meal) {
   var timeInput = document.getElementById('food-time-input2');
   if (timeInput) timeInput.value = ('0'+now.getHours()).slice(-2) + ':' + ('0'+now.getMinutes()).slice(-2);
   document.getElementById('food-overlay-title').textContent = '🍽 ' + currentFoodMeal + 'の記録';
-  document.getElementById('food-overlay-sub').textContent = formatDate() + ' · 写真も撮っておこう！';
+  document.getElementById('food-overlay-sub').textContent = formatDate() + ' · 写真は任意でOK！';
   document.getElementById('food-menu-input').value = '';
   document.getElementById('food-restaurant-input').style.display = 'none';
   document.getElementById('food-restaurant-input').value = '';
@@ -3932,7 +3932,9 @@ function renderFoodGallery() {
     var firstPhoto = photos[0] || null;
     var cookColor = cookColors[f.cook] || 'var(--text3)';
     return '<div style="display:flex;gap:12px;padding:12px 0;border-bottom:0.5px solid var(--border)">' +
-      (firstPhoto ? '<img src="' + firstPhoto + '" style="width:64px;height:64px;object-fit:cover;border-radius:10px;flex-shrink:0">' : '<div style="width:64px;height:64px;background:var(--bg2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0">🍽</div>') +
+      (firstPhoto
+        ? '<img src="' + firstPhoto + '" style="width:64px;height:64px;object-fit:cover;border-radius:10px;flex-shrink:0">'
+        : '<div style="width:64px;height:64px;background:var(--bg2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:30px;flex-shrink:0">' + (f.score ? scoreEmoji[f.score] : '🍽') + '</div>') +
       '<div style="flex:1;min-width:0">' +
         '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px"><span style="font-size:13px;font-weight:600">' + f.meal + '</span>' + (f.score ? '<span>' + scoreEmoji[f.score] + '</span>' : '') + '</div>' +
         (f.restaurant ? '<div style="font-size:12px;color:var(--accent);margin-bottom:2px">🏪 ' + f.restaurant + '</div>' : '') +
