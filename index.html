@@ -296,6 +296,15 @@
   .break-task-dur { font-size: 12px; color: var(--text3); }
   .break-add-row { display: flex; gap: 8px; margin-top: 12px; }
   .break-close { width: 100%; margin-top: 12px; padding: 13px; border-radius: var(--radius-sm); border: 0.5px solid var(--border2); background: transparent; color: var(--text2); font-size: 15px; cursor: pointer; }
+
+  /* ===== ホーム編集モード ===== */
+  .module-edit-bar { display: none; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; margin: 0 12px 4px; background: var(--bg2); border: 1px dashed var(--border2); border-radius: 8px; }
+  #home-modules.edit-mode .module-edit-bar { display: flex; }
+  #home-modules.edit-mode .home-module { outline: 1.5px dashed var(--border2); outline-offset: -4px; border-radius: 14px; }
+  .dash-drag-handle { cursor: grab; font-size: 12px; color: var(--text2); font-weight: 700; user-select: none; touch-action: none; }
+  .dash-drag-handle:active { cursor: grabbing; }
+  .module-hide-btn { font-size: 11px; color: #e74c3c; background: none; border: none; cursor: pointer; font-weight: 700; padding: 4px 6px; }
+  .sortable-ghost { opacity: 0.4; }
 </style>
 </head>
 <body>
@@ -313,9 +322,12 @@
 
 <!-- HOME VIEW -->
 <div id="view-home" class="view active">
-  <div class="date-header">
-    <div class="date-text" id="date-display"></div>
-    <div class="greeting" id="greeting-text"></div>
+  <div class="date-header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+    <div style="min-width:0">
+      <div class="date-text" id="date-display"></div>
+      <div class="greeting" id="greeting-text"></div>
+    </div>
+    <button id="home-edit-btn" onclick="toggleHomeEdit()" style="flex-shrink:0;margin-top:4px;font-size:12px;padding:6px 12px;border-radius:8px;border:0.5px solid var(--border2);background:var(--card);color:var(--text2);font-weight:600;cursor:pointer">✏️ 編集</button>
   </div>
 
   <!-- ミニタイマーバー -->
@@ -332,8 +344,13 @@
     </div>
   </div>
 
+  <!-- 非表示モジュールの復活パネル（編集モード時のみ） -->
+  <div id="home-hidden-panel" style="display:none;margin:0 12px 8px;padding:10px 12px;background:var(--bg2);border:1px dashed var(--border2);border-radius:10px"></div>
+
+  <!-- ===== 並べ替え・非表示できるホームモジュール ===== -->
+  <div id="home-modules">
   <!-- Googleカレンダー -->
-  <div class="dashboard" style="padding-bottom:0" id="gcal-section">
+  <div class="dashboard home-module" style="padding-bottom:0" id="gcal-section" data-block="gcal">
     <div class="dash-card" style="margin-bottom:8px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <div style="display:flex;align-items:center;gap:6px">
@@ -350,7 +367,7 @@
     </div>
   </div>
 
-  <div class="dashboard" id="dashboard">
+  <div class="dashboard home-module" id="dashboard" data-block="dashboard">
     <div class="dash-grid">
       <div class="dash-card" id="dash-weight-card">
         <div class="dash-label">体重</div>
@@ -410,7 +427,7 @@
     </div>
     </div>
   </div>
-  <div style="padding: 0 12px 8px">
+  <div class="home-module" data-block="frog" style="padding: 0 12px 8px">
     <div class="dash-card" style="margin-bottom:8px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
         <div style="display:flex;align-items:center;gap:6px">
@@ -432,20 +449,22 @@
       </div>
     </div>
   </div>
-  <div style="padding: 0 12px 8px">
+  <div class="home-module" data-block="hormone" style="padding: 0 12px 8px">
     <div class="dash-card" id="dash-hormone-card">
       <div class="dash-label" style="margin-bottom:6px">今日のホルモン予報</div>
       <div id="dash-hormone-content">読み込み中...</div>
     </div>
   </div>
   <!-- クイック記録ボタン -->
-  <div id="home-quick-btns" style="display:flex;gap:8px;padding:0 12px 8px">
-    <button onclick="openMealSelect()" style="flex:1;padding:10px;border-radius:10px;border:0.5px solid var(--border);background:var(--card);color:var(--text);font-size:13px;font-weight:600;cursor:pointer">🍽 ご飯を記録</button>
-    <button onclick="openExerciseOverlay()" style="flex:1;padding:10px;border-radius:10px;border:0.5px solid var(--border);background:var(--card);color:var(--text);font-size:13px;font-weight:600;cursor:pointer">💪 運動を記録</button>
+  <div class="home-module" data-block="quick">
+    <div id="home-quick-btns" style="display:flex;gap:8px;padding:0 12px 8px">
+      <button onclick="openMealSelect()" style="flex:1;padding:10px;border-radius:10px;border:0.5px solid var(--border);background:var(--card);color:var(--text);font-size:13px;font-weight:600;cursor:pointer">🍽 ご飯を記録</button>
+      <button onclick="openExerciseOverlay()" style="flex:1;padding:10px;border-radius:10px;border:0.5px solid var(--border);background:var(--card);color:var(--text);font-size:13px;font-weight:600;cursor:pointer">💪 運動を記録</button>
+    </div>
   </div>
 
   <!-- 今なにしてる？ -->
-  <div style="padding:0 12px 8px">
+  <div class="home-module" data-block="now" style="padding:0 12px 8px">
     <div id="now-tracking-status" style="display:none;background:var(--accent);border-radius:12px;padding:12px 14px;margin-bottom:8px">
       <div style="display:flex;align-items:center;justify-content:space-between">
         <div style="flex:1;min-width:0">
@@ -478,8 +497,8 @@
       <button onclick="closeMealSelect()" style="width:100%;padding:12px;border-radius:10px;border:0.5px solid var(--border2);background:transparent;color:var(--text2);font-size:14px;cursor:pointer;margin-top:12px">キャンセル</button>
     </div>
   </div>
-  <div id="routine-list"></div>
-  <div style="margin: 8px 12px 16px">
+  <div class="home-module" data-block="routines"><div id="routine-list"></div></div>
+  <div class="home-module" data-block="break" style="margin: 8px 12px 16px">
     <button onclick="toggleBreakTaskManager()" style="width:100%;padding:12px 14px;border-radius:var(--radius);border:0.5px solid var(--border);background:var(--card);color:var(--text);font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:space-between">
       <span>☕ ポモ休憩タスク管理</span>
       <span id="break-mgr-chevron" style="color:var(--text3)">▾</span>
@@ -492,6 +511,7 @@
       </div>
     </div>
   </div>
+  </div><!-- /#home-modules -->
 </div>
 
 <!-- TIMER VIEW -->
@@ -1876,22 +1896,130 @@ function renderHome() {
     container.appendChild(div);
   });
 
-  // ダッシュボードのドラッグ並び替え（ダッシュカード間）
-  var dashboard = document.getElementById('dashboard');
-  if (dashboard && window.Sortable && !dashboard._sortableInit) {
-    dashboard._sortableInit = true;
-    // ダッシュボード内のブロックをSortableに
-    var quickBtns = document.getElementById('home-quick-btns');
-    if (quickBtns) {
-      Sortable.create(dashboard, {
-        handle: '.dash-drag-handle',
-        animation: 150,
-        onEnd: function() {
-          // 順序保存
-        }
-      });
-    }
+  // ホームのモジュール並べ替え・非表示を適用
+  try { initHomeSortable(); applyHomeLayout(); } catch(e) { console.warn('home layout', e); }
+}
+
+// ===== ホーム編集モード（モジュールの並べ替え・非表示・復活） =====
+var HOME_BLOCK_LABELS = {
+  gcal: '📅 今日の予定',
+  dashboard: '📊 ダッシュボード（体重・天気・コンサータ等）',
+  frog: '🐸 今日のカエル',
+  hormone: '🌸 ホルモン予報',
+  quick: '⚡ クイック記録',
+  now: '⏱ 今なにしてる？',
+  routines: '📋 ルーティン',
+  break: '☕ 休憩タスク管理'
+};
+var HOME_BLOCK_DEFAULT = ['gcal','dashboard','frog','hormone','quick','now','routines','break'];
+var homeEditMode = false;
+
+function getHomeLayout() {
+  var order = null, hidden = null;
+  try { order = JSON.parse(localStorage.getItem('azusa_home_order') || 'null'); } catch(e) {}
+  try { hidden = JSON.parse(localStorage.getItem('azusa_home_hidden') || 'null'); } catch(e) {}
+  if (!Array.isArray(order)) order = HOME_BLOCK_DEFAULT.slice();
+  // 既知のモジュールが順序リストに無ければ末尾に足す（将来モジュールが増えても安全）
+  HOME_BLOCK_DEFAULT.forEach(function(id) { if (order.indexOf(id) < 0) order.push(id); });
+  if (!Array.isArray(hidden)) hidden = [];
+  return { order: order, hidden: hidden };
+}
+function saveHomeLayout(layout) {
+  localStorage.setItem('azusa_home_order', JSON.stringify(layout.order));
+  localStorage.setItem('azusa_home_hidden', JSON.stringify(layout.hidden));
+}
+
+function ensureModuleControls(el) {
+  if (el._ctrlInit) return;
+  el._ctrlInit = true;
+  var id = el.getAttribute('data-block');
+  var bar = document.createElement('div');
+  bar.className = 'module-edit-bar';
+  bar.innerHTML =
+    '<span class="dash-drag-handle">⋮⋮ ' + (HOME_BLOCK_LABELS[id] || id) + '</span>' +
+    '<button class="module-hide-btn" onclick="hideHomeBlock(\'' + id + '\')">✕ 非表示</button>';
+  el.insertBefore(bar, el.firstChild);
+}
+
+function applyHomeLayout() {
+  var container = document.getElementById('home-modules');
+  if (!container) return;
+  var layout = getHomeLayout();
+  // 保存された順番どおりに並べ直す
+  layout.order.forEach(function(id) {
+    var el = container.querySelector('.home-module[data-block="' + id + '"]');
+    if (el) container.appendChild(el);
+  });
+  // 各モジュールに編集バーを用意し、表示/非表示を反映
+  container.querySelectorAll('.home-module').forEach(function(el) {
+    ensureModuleControls(el);
+    var id = el.getAttribute('data-block');
+    el.style.display = (layout.hidden.indexOf(id) >= 0) ? 'none' : '';
+  });
+  container.classList.toggle('edit-mode', homeEditMode);
+  renderHiddenPanel(layout);
+}
+
+function renderHiddenPanel(layout) {
+  var panel = document.getElementById('home-hidden-panel');
+  if (!panel) return;
+  if (!homeEditMode || !layout.hidden.length) {
+    panel.style.display = 'none';
+    panel.innerHTML = '';
+    return;
   }
+  panel.style.display = '';
+  panel.innerHTML =
+    '<div style="font-size:12px;color:var(--text3);margin-bottom:8px">🙈 非表示中のモジュール（タップで復活）</div>' +
+    '<div style="display:flex;flex-wrap:wrap;gap:8px">' +
+    layout.hidden.map(function(id) {
+      return '<button onclick="showHomeBlock(\'' + id + '\')" style="font-size:12px;padding:7px 12px;border-radius:8px;border:0.5px solid var(--accent);background:var(--card);color:var(--accent);font-weight:600;cursor:pointer">＋ ' + (HOME_BLOCK_LABELS[id] || id) + '</button>';
+    }).join('') +
+    '</div>';
+}
+
+function hideHomeBlock(id) {
+  var layout = getHomeLayout();
+  if (layout.hidden.indexOf(id) < 0) layout.hidden.push(id);
+  saveHomeLayout(layout);
+  applyHomeLayout();
+}
+function showHomeBlock(id) {
+  var layout = getHomeLayout();
+  layout.hidden = layout.hidden.filter(function(x) { return x !== id; });
+  saveHomeLayout(layout);
+  applyHomeLayout();
+}
+
+function toggleHomeEdit() {
+  homeEditMode = !homeEditMode;
+  var btn = document.getElementById('home-edit-btn');
+  if (btn) {
+    btn.textContent = homeEditMode ? '✓ 完了' : '✏️ 編集';
+    btn.style.background = homeEditMode ? 'var(--accent)' : 'var(--card)';
+    btn.style.color = homeEditMode ? 'white' : 'var(--text2)';
+  }
+  applyHomeLayout();
+}
+
+function initHomeSortable() {
+  var container = document.getElementById('home-modules');
+  if (!container || !window.Sortable || container._sortableInit) return;
+  container._sortableInit = true;
+  Sortable.create(container, {
+    draggable: '.home-module',
+    handle: '.dash-drag-handle',
+    animation: 150,
+    onEnd: function() {
+      var order = Array.prototype.map.call(
+        container.querySelectorAll('.home-module'),
+        function(el) { return el.getAttribute('data-block'); }
+      );
+      var layout = getHomeLayout();
+      layout.order = order;
+      saveHomeLayout(layout);
+    }
+  });
 }
 
 function getTodayTaskOrder(routineId) {
