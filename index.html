@@ -2004,6 +2004,7 @@ function toggleHomeEdit() {
     btn.style.background = homeEditMode ? 'var(--accent)' : 'var(--card)';
     btn.style.color = homeEditMode ? 'white' : 'var(--text2)';
   }
+  initHomeSortable(); // Sortable読み込み後に確実に有効化する
   applyHomeLayout();
 }
 
@@ -2015,6 +2016,10 @@ function initHomeSortable() {
     draggable: '.home-module',
     handle: '.dash-drag-handle',
     animation: 150,
+    forceFallback: true,       // スマホ（タッチ）での並べ替えを安定させる
+    fallbackTolerance: 4,
+    delay: 80,
+    delayOnTouchOnly: true,
     onEnd: function() {
       var order = Array.prototype.map.call(
         container.querySelectorAll('.home-module'),
@@ -2026,6 +2031,11 @@ function initHomeSortable() {
     }
   });
 }
+
+// SortableのCDNはこのスクリプトの後ろで読み込まれるため、load後にも確実に初期化する
+window.addEventListener('load', function() {
+  try { initHomeSortable(); applyHomeLayout(); } catch(e) {}
+});
 
 function getTodayTaskOrder(routineId) {
   const key = 'azusa_today_order_' + routineId + '_' + todayKey();
