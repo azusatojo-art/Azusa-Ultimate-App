@@ -4004,6 +4004,8 @@ var SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 var USER_ID = 'azusa_main';
 var syncTimeout = null;
 var lastSyncTime = 0;
+// クラウドの状態を確認できるまでアップロードを禁止する（空データで上書きする事故を防ぐ）
+var cloudPulled = false;
 
 function supaFetch(method, body) {
   return fetch(SUPA_URL + '/rest/v1/user_data', {
@@ -4031,9 +4033,13 @@ function getAllLocalData() {
 }
 
 function syncToCloud() {
+  // クラウドからの初回読み込みが終わるまでは絶対にアップロードしない（全消し事故の防止）
+  if (!cloudPulled) return;
   if (syncTimeout) clearTimeout(syncTimeout);
   syncTimeout = setTimeout(function() {
     var data = getAllLocalData();
+    // 空データでクラウドを上書きしない（消えたように見える事故の防止）
+    if (Object.keys(data).length === 0) return;
     supaFetch('POST', { user_id: USER_ID, data: data, updated_at: new Date().toISOString() })
       .then(function(r) { if (r.ok) lastSyncTime = Date.now(); })
       .catch(function(e) { console.log('Sync failed:', e); });
@@ -4044,6 +4050,7 @@ function syncFromCloud() {
   return supaFetch('GET')
     .then(function(r) { return r.json(); })
     .then(function(rows) {
+      cloudPulled = true; // クラウドの状態を確認できた＝以後アップロードを許可
       if (!rows || rows.length === 0) return false;
       var row = rows.find(function(r) { return r.user_id === USER_ID; });
       if (!row || !row.data) return false;
