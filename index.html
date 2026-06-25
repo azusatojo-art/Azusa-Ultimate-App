@@ -1651,7 +1651,7 @@ function renderFrogList() {
   var container = document.getElementById('frog-list');
   if (!container) return;
   if (tasks.length === 0) {
-    container.innerHTML = '<div style="font-size:13px;color:var(--text3);padding:4px 0">今日のカエルを追加しよう 🐸</div>';
+    container.innerHTML = '<div onclick="addFrogTask()" style="font-size:13px;color:var(--text3);padding:8px 2px;cursor:pointer">＋ 今日のカエルを追加しよう 🐸</div>';
     return;
   }
   container.innerHTML = tasks.map(function(t, i) {
@@ -4427,7 +4427,7 @@ function renderFrogList() {
   var container = document.getElementById('frog-list');
   if (!container) return;
   if (tasks.length === 0) {
-    container.innerHTML = '<div style="font-size:13px;color:var(--text3);padding:4px 0">今日のカエルを追加しよう 🐸</div>';
+    container.innerHTML = '<div onclick="addFrogTask()" style="font-size:13px;color:var(--text3);padding:8px 2px;cursor:pointer">＋ 今日のカエルを追加しよう 🐸</div>';
     return;
   }
   container.innerHTML = tasks.map(function(t, i) {
