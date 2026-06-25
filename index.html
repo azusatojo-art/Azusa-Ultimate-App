@@ -305,6 +305,13 @@
   .dash-drag-handle:active { cursor: grabbing; }
   .module-hide-btn { font-size: 11px; color: #e74c3c; background: none; border: none; cursor: pointer; font-weight: 700; padding: 4px 6px; }
   .sortable-ghost { opacity: 0.4; }
+
+  /* ===== Googleカレンダー 予定カード ===== */
+  .cal-event-card { background:var(--card); border-radius:12px; border:0.5px solid var(--border); padding:12px 14px; margin-bottom:8px; }
+  .cal-event-time { font-size:12px; color:var(--text3); margin-bottom:3px; }
+  .cal-event-title { font-size:15px; font-weight:600; color:var(--text); }
+  .cal-event-depart { margin-top:6px; font-size:13px; font-weight:600; color:#e74c3c; background:rgba(231,76,60,0.1); border-radius:8px; padding:5px 10px; display:inline-block; }
+  .cal-event-location { font-size:12px; color:var(--accent); margin-top:3px; }
 </style>
 </head>
 <body>
@@ -1851,11 +1858,6 @@ function displayWeather(w) {
   document.getElementById('dash-temp').textContent = w.temp + '°C　' + weatherCodeToDesc(w.code);
   document.getElementById('dash-weather-icon').textContent = weatherCodeToIcon(w.code);
   document.getElementById('dash-weather-feels').textContent = '体感 ' + w.feels + '°C　風 ' + w.wind + 'km/h';
-}
-
-// Googleカレンダー連携は未実装（ボタンだけの状態）。押しても無反応で混乱するので案内を出す。
-function gcalSignIn() {
-  alert('Googleカレンダー連携は準備中だよ🙏\nこの機能はまだ中身が作られていません。使いたくなったら教えてね（セットアップから一緒にやります）。');
 }
 
 function reverseGeocode(lat, lon) {
@@ -4524,8 +4526,286 @@ loadNowTracking();
     }
   }
 })();
+// ===== Google Calendar 連携 =====
+var GCAL_CLIENT_ID = '557964624818-6g728i9oh4buqm6njvt2mev5q3r8286q.apps.googleusercontent.com';
+var GCAL_SCOPES = 'https://www.googleapis.com/auth/calendar.readonly';
+var gcalTokenClient = null;
+var gcalAccessToken = null;
+var gapiReady = false;
+
+function gapiLoaded() {
+  gapi.load('client', function() {
+    gapi.client.init({
+      discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest']
+    }).then(function() {
+      gapiReady = true;
+      var saved = localStorage.getItem('gcal_token');
+      if (saved) {
+        gcalAccessToken = saved;
+        gapi.client.setToken({ access_token: gcalAccessToken });
+        updateGcalAuthUI(true);
+        fetchTodayEvents();
+      }
+    });
+  });
+}
+
+function gcalSignIn() {
+  // ライブラリ未読み込みなら待ってリトライ
+  if (!window.google || !window.google.accounts) {
+    var btn = document.getElementById('gcal-signin-btn') || document.querySelector('[onclick*="gcalSignIn"]');
+    if (btn) { btn.textContent = '読み込み中...'; btn.disabled = true; }
+    var tries = 0;
+    var wait = setInterval(function() {
+      tries++;
+      if (window.google && window.google.accounts) {
+        clearInterval(wait);
+        if (btn) { btn.textContent = 'Googleでログイン'; btn.disabled = false; }
+        gcalSignIn();
+      } else if (tries > 20) {
+        clearInterval(wait);
+        if (btn) { btn.textContent = 'Googleでログイン'; btn.disabled = false; }
+        alert('Google APIの読み込みに失敗しました。ページを再読み込みして試してね。');
+      }
+    }, 500);
+    return;
+  }
+  if (!gapiReady) {
+    alert('もう少し待ってね（APIの初期化中）');
+    return;
+  }
+  gcalTokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GCAL_CLIENT_ID,
+    scope: GCAL_SCOPES,
+    callback: function(resp) {
+      if (resp.error) { console.error(resp); return; }
+      gcalAccessToken = resp.access_token;
+      localStorage.setItem('gcal_token', gcalAccessToken);
+      gapi.client.setToken({ access_token: gcalAccessToken });
+      updateGcalAuthUI(true);
+      fetchTodayEvents();
+    }
+  });
+  gcalTokenClient.requestAccessToken({ prompt: '' });
+}
+
+function gcalSignOut() {
+  google.accounts.oauth2.revoke(gcalAccessToken, function() {});
+  gcalAccessToken = null;
+  localStorage.removeItem('gcal_token');
+  gapi.client.setToken(null);
+  updateGcalAuthUI(false);
+  document.getElementById('gcal-events').innerHTML = '<div style="font-size:13px;color:var(--text3)">ログインして予定を確認しよう</div>';
+}
+
+function updateGcalAuthUI(isSignedIn) {
+  var area = document.getElementById('gcal-auth-area');
+  if (!area) return;
+  if (isSignedIn) {
+    area.innerHTML = '<button onclick="gcalSignOut()" style="font-size:11px;padding:4px 10px;border-radius:8px;border:0.5px solid var(--border2);background:var(--bg2);color:var(--text2);cursor:pointer">ログアウト</button>';
+  } else {
+    area.innerHTML = '<button onclick="gcalSignIn()" style="font-size:12px;padding:5px 12px;border-radius:8px;background:var(--accent);color:white;border:none;cursor:pointer;font-weight:600">Googleでログイン</button>';
+  }
+}
+
+function fetchTodayEvents() {
+  if (!gapiReady || !gcalAccessToken) return;
+  var now = new Date();
+  var tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+
+  var startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0).toISOString();
+  var endOfTomorrow = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 23, 59, 59).toISOString();
+
+  gapi.client.calendar.events.list({
+    calendarId: 'primary',
+    timeMin: startOfToday,
+    timeMax: endOfTomorrow,
+    singleEvents: true,
+    orderBy: 'startTime',
+    maxResults: 20
+  }).then(function(resp) {
+    var allEvents = resp.result.items || [];
+    // 今日と明日に分ける
+    var todayStr = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+    var tomorrowStr = tomorrow.getFullYear() + '-' + String(tomorrow.getMonth()+1).padStart(2,'0') + '-' + String(tomorrow.getDate()).padStart(2,'0');
+
+    var todayEvents = allEvents.filter(function(ev) {
+      var d = ev.start.dateTime ? ev.start.dateTime.slice(0,10) : ev.start.date;
+      return d === todayStr;
+    });
+    var tomorrowEvents = allEvents.filter(function(ev) {
+      var d = ev.start.dateTime ? ev.start.dateTime.slice(0,10) : ev.start.date;
+      return d === tomorrowStr;
+    });
+    renderGcalEvents(todayEvents, tomorrowEvents);
+  }).catch(function(err) {
+    if (err.status === 401) {
+      localStorage.removeItem('gcal_token');
+      gcalAccessToken = null;
+      updateGcalAuthUI(false);
+      document.getElementById('gcal-events').innerHTML = '<div style="font-size:13px;color:var(--text3)">再ログインが必要だよ</div>';
+    }
+  });
+}
+
+// 所要時間を場所名で保存・取得
+var HOME_ADDRESS = '京都府京都市中京区清水町341-4';
+
+function getTravelTime(location) {
+  try {
+    var saved = JSON.parse(localStorage.getItem('azusa_travel_times') || '{}');
+    return saved[location] || null;
+  } catch(e) { return null; }
+}
+function saveTravelTime(location, minutes) {
+  try {
+    var saved = JSON.parse(localStorage.getItem('azusa_travel_times') || '{}');
+    saved[location] = minutes;
+    localStorage.setItem('azusa_travel_times', JSON.stringify(saved));
+  } catch(e) {}
+}
+
+function promptTravelTime(location) {
+  var current = getTravelTime(location);
+  var input = prompt('「' + location + '」まで何分かかる？\n（Googleマップで調べてからどうぞ）', current || '');
+  if (input === null) return;
+  var mins = parseInt(input);
+  if (isNaN(mins) || mins <= 0) { alert('数字で入力してね！'); return; }
+  saveTravelTime(location, mins);
+  fetchTodayEvents();
+}
+
+function copyJulienMessage(summary, startStr, prepTime, departTime, mapsUrl, isToday) {
+  var day = isToday ? '今日' : '明日';
+  var text = day + ' ' + summary + ' ' + startStr + ' だよ！\n';
+  if (prepTime) text += '🕐 ' + prepTime + ' 準備開始\n';
+  if (departTime) text += '🚪 ' + departTime + ' 出発！\n';
+  if (mapsUrl) text += '🚃 乗換案内: ' + mapsUrl;
+  navigator.clipboard.writeText(text.trim()).then(function() {
+    speak('コピーしたよ！');
+  }).catch(function() {
+    var ta = document.createElement('textarea');
+    ta.value = text.trim();
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    speak('コピーしたよ！');
+  });
+}
+
+function buildEventCard(ev, isToday) {
+  var isAllDay = !ev.start.dateTime;
+  var startStr = '', endStr = '';
+  if (!isAllDay) {
+    startStr = fmtTime(new Date(ev.start.dateTime));
+    endStr = fmtTime(new Date(ev.end.dateTime));
+  }
+
+  var location = ev.location || '';
+  var departInfo = '';
+  var prepTimeStr = '', departTimeStr = '', mapsRouteUrl = '';
+
+  if (!isAllDay && ev.start.dateTime) {
+    var eventStart = new Date(ev.start.dateTime);
+    var travelMin = location ? getTravelTime(location) : null;
+    mapsRouteUrl = location && !location.startsWith('http')
+      ? 'https://www.google.com/maps/dir/?api=1&origin=' + encodeURIComponent(HOME_ADDRESS) + '&destination=' + encodeURIComponent(location) + '&travelmode=transit'
+      : '';
+
+    if (location && travelMin) {
+      var departD = new Date(eventStart.getTime() - (travelMin + 10) * 60000);
+      var prepD = new Date(departD.getTime() - 60 * 60000);
+      prepTimeStr = fmtTime(prepD);
+      departTimeStr = fmtTime(departD);
+
+      var summary = ev.summary || '';
+      var startLabel = startStr;
+      var safeSum = summary.replace(/'/g, "\\'");
+      var safeMaps = mapsRouteUrl.replace(/'/g, "\\'");
+
+      departInfo = '<div style="margin-top:10px">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
+          '<span style="font-size:12px;background:var(--bg2);border-radius:8px;padding:4px 10px;color:var(--text2)">🕐 ' + prepTimeStr + ' 準備開始</span>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">' +
+          '<span class="cal-event-depart">🚪 ' + departTimeStr + ' 出発！</span>' +
+          (mapsRouteUrl ? '<a href="' + mapsRouteUrl + '" target="_blank" style="font-size:12px;color:var(--accent);text-decoration:none;background:rgba(100,160,255,0.1);border-radius:8px;padding:4px 10px">🚃 乗換案内</a>' : '') +
+          '<button onclick="promptTravelTime(\'' + location.replace(/'/g,"\\'") + '\')" style="font-size:11px;color:var(--text3);background:none;border:none;cursor:pointer;padding:0">✏️ ' + travelMin + '分（変更）</button>' +
+        '</div>' +
+        '<button onclick="copyJulienMessage(\'' + safeSum + '\',\'' + startLabel + '\',\'' + prepTimeStr + '\',\'' + departTimeStr + '\',\'' + safeMaps + '\',' + isToday + ')" style="font-size:12px;padding:5px 12px;border-radius:8px;border:0.5px solid var(--border2);background:var(--bg2);color:var(--text);cursor:pointer">📋 ジュリアンに送る</button>' +
+      '</div>';
+    } else if (location) {
+      departInfo = '<div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+        '<button onclick="promptTravelTime(\'' + location.replace(/'/g,"\\'") + '\')" style="font-size:12px;color:white;background:var(--accent);border:none;border-radius:8px;padding:5px 12px;cursor:pointer;font-weight:600">⏱ 所要時間を登録</button>' +
+        (mapsRouteUrl ? '<a href="' + mapsRouteUrl + '" target="_blank" style="font-size:12px;color:var(--accent);text-decoration:none;background:rgba(100,160,255,0.1);border-radius:8px;padding:5px 10px">🚃 乗換案内</a>' : '') +
+      '</div>';
+    }
+  }
+
+  var timeLabel = isAllDay ? '終日' : startStr + ' → ' + endStr;
+  var locationLabel = location ? (location.startsWith('http') ? (ev.summary || '地図を見る') : location) : '';
+  var locationHtml = location
+    ? '<div class="cal-event-location"><a href="' + location + '" target="_blank" style="color:var(--accent);text-decoration:none">📍 ' + locationLabel + '</a></div>'
+    : '';
+  return '<div class="cal-event-card">' +
+    '<div class="cal-event-time">' + timeLabel + '</div>' +
+    '<div class="cal-event-title">' + (ev.summary || '（タイトルなし）') + '</div>' +
+    locationHtml +
+    departInfo +
+  '</div>';
+}
+
+function renderGcalEvents(todayEvents, tomorrowEvents) {
+  var container = document.getElementById('gcal-events');
+  if (!container) return;
+
+  var html = '';
+
+  // 今日
+  if (todayEvents.length === 0) {
+    html += '<div style="font-size:13px;color:var(--text3);margin-bottom:12px">今日は予定なし！ゆっくりできるね✨</div>';
+  } else {
+    html += todayEvents.map(function(ev) { return buildEventCard(ev, true); }).join('');
+  }
+
+  // 明日
+  if (tomorrowEvents.length > 0) {
+    html += '<div style="font-size:12px;font-weight:600;color:var(--text3);margin:12px 0 6px;padding-top:10px;border-top:0.5px solid var(--border)">明日の予定</div>';
+    html += tomorrowEvents.map(function(ev) { return buildEventCard(ev, false); }).join('');
+  }
+
+  container.innerHTML = html;
+
+  // 出発アラート（今日の予定のみ）
+  var nextOutdoor = todayEvents.find(function(ev) {
+    return ev.location && ev.start.dateTime && new Date(ev.start.dateTime) > new Date();
+  });
+  if (nextOutdoor) {
+    var startD = new Date(nextOutdoor.start.dateTime);
+    var departD = new Date(startD.getTime() - 45 * 60000);
+    var minsToDepart = Math.floor((departD - Date.now()) / 60000);
+    if (minsToDepart > 0 && minsToDepart <= 60) {
+      var nudgeEl = document.getElementById('gcal-depart-nudge');
+      if (!nudgeEl) {
+        nudgeEl = document.createElement('div');
+        nudgeEl.id = 'gcal-depart-nudge';
+        nudgeEl.style.cssText = 'background:#e74c3c;color:white;border-radius:12px;padding:10px 14px;margin:0 0 8px;font-size:13px;font-weight:600';
+        container.insertBefore(nudgeEl, container.firstChild);
+      }
+      nudgeEl.textContent = '🚨 ' + fmtTime(departD) + ' までに出発！「' + nextOutdoor.summary + '」まであと' + minsToDepart + '分';
+    }
+  }
+}
+
+// 5分ごとにカレンダー更新
+setInterval(function() {
+  if (gcalAccessToken) fetchTodayEvents();
+}, 5 * 60 * 1000);
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://apis.google.com/js/api.js" async defer onload="gapiLoaded()"></script>
 
 <style>
   .pwa-splash {
