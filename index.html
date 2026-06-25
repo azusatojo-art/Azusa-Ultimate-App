@@ -2305,6 +2305,23 @@ function updateTimerDisplay() {
     miniEl.textContent = String(m).padStart(2,'0') + ':' + String(sec).padStart(2,'0');
   }
 
+  // 保険：タスク名や一覧が空なら現在の状態から補完する（復元時の取りこぼし対策）
+  var _nameEl = document.getElementById('task-name-display');
+  if (_nameEl && !_nameEl.textContent) {
+    var _ordered = timerState.orderedTasks || (r ? getOrderedTasks(timerState.routineId) : null);
+    var _entry = _ordered && _ordered[timerState.taskIndex];
+    if (_entry && _entry.task) {
+      _nameEl.textContent = _entry.task.name || '';
+      var _em = document.getElementById('task-emoji-display');
+      if (_em) _em.textContent = _entry.task.emoji || '';
+      var _nx = _ordered[timerState.taskIndex + 1];
+      var _nxEl = document.getElementById('next-up-name');
+      if (_nxEl) _nxEl.textContent = (_nx && _nx.task) ? _nx.task.name : 'ルーティン終了！';
+      if (r) { var _rn = document.getElementById('timer-routine-name'); if (_rn && !_rn.textContent) _rn.textContent = r.name; }
+      try { renderMiniList(); } catch(e) {}
+    }
+  }
+
   // 状態保存（30秒ごと）
   if (!updateTimerDisplay._lastSave || Date.now() - updateTimerDisplay._lastSave > 30000) {
     saveTimerState && saveTimerState();
@@ -2500,9 +2517,9 @@ function exitTimer() {
 
 function renderMiniList() {
   const r = routines.find(x => x.id === timerState.routineId);
-  if (!r) return;
-  const done = todayProgress[r.id] || [];
-  const ordered = timerState.orderedTasks || getOrderedTasks(timerState.routineId);
+  const ordered = timerState.orderedTasks || (r ? getOrderedTasks(timerState.routineId) : null);
+  if (!ordered || !ordered.length) return;
+  const done = todayProgress[timerState.routineId] || [];
   const container = document.getElementById('task-list-mini');
   container.innerHTML = ordered.map((entry, i) => {
     const t = entry.task;
@@ -4438,14 +4455,22 @@ function hideMiniTimerBar() {
 // 保存済みのタイマー状態から、タイマー画面を副作用なしで作り直す（残り時間はリセットしない）
 function renderTimerFromState() {
   var r = routines.find(function(x) { return x.id === timerState.routineId; });
-  var ordered = timerState.orderedTasks || (r ? getOrderedTasks(timerState.routineId) : null);
-  if (!r || !ordered || !ordered[timerState.taskIndex]) return false;
+  var ordered = timerState.orderedTasks;
+  // 保存分が壊れている/タスクが欠けていたらルーティンから作り直す
+  if (!ordered || !ordered[timerState.taskIndex] || !ordered[timerState.taskIndex].task) {
+    ordered = r ? getOrderedTasks(timerState.routineId) : ordered;
+    if (ordered) timerState.orderedTasks = ordered;
+  }
+  if (!ordered || !ordered.length) return false;
   var idx = timerState.taskIndex;
+  if (idx < 0 || idx >= ordered.length) { idx = 0; timerState.taskIndex = 0; }
+  if (!ordered[idx] || !ordered[idx].task) return false;
   var task = ordered[idx].task;
+  var taskCount = r ? r.tasks.length : ordered.length;
   var setText = function(id, t) { var el = document.getElementById(id); if (el) el.textContent = t; };
-  setText('timer-routine-name', r.name);
-  setText('timer-routine-meta', r.icon + ' ' + r.tasks.length + 'タスク');
-  setText('task-counter', (idx + 1) + ' / ' + r.tasks.length);
+  setText('timer-routine-name', r ? r.name : '');
+  setText('timer-routine-meta', (r ? r.icon + ' ' : '') + taskCount + 'タスク');
+  setText('task-counter', (idx + 1) + ' / ' + taskCount);
   setText('task-name-display', task.name);
   var emojiEl = document.getElementById('task-emoji-display');
   if (emojiEl) emojiEl.textContent = task.emoji || '';
@@ -4456,7 +4481,7 @@ function renderTimerFromState() {
   var timeRangeEl = document.getElementById('timer-time-range');
   if (timeRangeEl) timeRangeEl.textContent = startStr + ' → ' + endStr;
   var next = ordered[idx + 1];
-  setText('next-up-name', next ? next.task.name : 'ルーティン終了！');
+  setText('next-up-name', (next && next.task) ? next.task.name : 'ルーティン終了！');
   var nbox = document.getElementById('next-up-box');
   if (nbox) nbox.style.display = next ? 'block' : 'none';
   var prevBtn = document.getElementById('prev-task-btn');
