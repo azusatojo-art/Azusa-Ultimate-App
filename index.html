@@ -430,7 +430,7 @@
         <div class="dash-label">今週の目標</div>
         <button onclick="editWeeklyGoal()" style="font-size:11px;color:var(--accent);background:none;border:none;cursor:pointer;font-weight:600">編集</button>
       </div>
-      <div id="dash-goal-text" onclick="editWeeklyGoal()" style="font-size:14px;color:var(--text);line-height:1.6;white-space:pre-wrap;cursor:pointer">タップして目標を入力...</div>
+      <div id="dash-goal-text" style="font-size:14px;color:var(--text);line-height:1.6"></div>
     </div>
     <div class="dash-card" style="margin-bottom:4px" onclick="openCycleTracker()">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
@@ -1833,11 +1833,65 @@ function closeGoalOverlay() {
   document.getElementById('goal-overlay').classList.remove('show');
 }
 
+// ===== 今週の目標：チェックリスト＋直接入力 =====
+function _escAttr(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+function parseGoals(text) {
+  if (!text) return [];
+  return text.split('\n').map(function(line) {
+    var m = line.match(/^\s*\[\s*([xX✓✔]?)\s*\]\s*(.*)$/); // [ ] / [] / [x] 形式
+    if (m) return { checked: /[xX✓✔]/.test(m[1]), text: m[2] };
+    var t = line.trim();
+    return t ? { checked: false, text: t } : null;
+  }).filter(Boolean);
+}
+function goalsToText(items) {
+  return items.map(function(it) { return '[' + (it.checked ? 'x' : ' ') + '] ' + it.text; }).join('\n');
+}
+function setWeeklyGoalText(text) {
+  localStorage.setItem('azusa_weekly_goal_' + getWeekKey(), text);
+  typeof syncToCloud === 'function' && syncToCloud();
+  updateGoalDisplay();
+}
+function toggleGoal(i) {
+  var items = parseGoals(getWeeklyGoal());
+  if (!items[i]) return;
+  items[i].checked = !items[i].checked;
+  setWeeklyGoalText(goalsToText(items));
+}
+function updateGoalText(i, val) {
+  var items = parseGoals(getWeeklyGoal());
+  if (!items[i]) return;
+  if (!val.trim()) { items.splice(i, 1); } else { items[i].text = val.trim(); }
+  setWeeklyGoalText(goalsToText(items));
+}
+function deleteGoal(i) {
+  var items = parseGoals(getWeeklyGoal());
+  items.splice(i, 1);
+  setWeeklyGoalText(goalsToText(items));
+}
+function addGoal(val) {
+  if (!val || !val.trim()) return;
+  var items = parseGoals(getWeeklyGoal());
+  items.push({ checked: false, text: val.trim() });
+  setWeeklyGoalText(goalsToText(items));
+  setTimeout(function() { var a = document.getElementById('goal-add-input'); if (a) a.focus(); }, 0);
+}
+
 function updateGoalDisplay() {
-  var goal = getWeeklyGoal();
   var el = document.getElementById('dash-goal-text');
-  if (el) el.textContent = goal || 'タップして目標を入力...';
-  if (el) el.style.color = goal ? 'var(--text)' : 'var(--text3)';
+  if (!el) return;
+  var items = parseGoals(getWeeklyGoal());
+  var html = items.map(function(it, i) {
+    var box = '<div onclick="toggleGoal(' + i + ')" style="width:20px;height:20px;flex-shrink:0;border-radius:6px;border:1.5px solid ' + (it.checked ? 'var(--accent)' : 'var(--border2)') + ';background:' + (it.checked ? 'var(--accent)' : 'transparent') + ';display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;cursor:pointer">' + (it.checked ? '✓' : '') + '</div>';
+    var input = '<input value="' + _escAttr(it.text) + '" onchange="updateGoalText(' + i + ', this.value)" style="flex:1;min-width:0;border:none;background:transparent;color:' + (it.checked ? 'var(--text3)' : 'var(--text)') + ';font-size:14px;' + (it.checked ? 'text-decoration:line-through;' : '') + 'outline:none;padding:2px 0;font-family:inherit">';
+    var del = '<button onclick="deleteGoal(' + i + ')" style="flex-shrink:0;background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:2px 4px">✕</button>';
+    return '<div style="display:flex;align-items:center;gap:8px;padding:2px 0">' + box + input + del + '</div>';
+  }).join('');
+  html += '<div style="display:flex;align-items:center;gap:8px;margin-top:4px">' +
+    '<span style="width:20px;text-align:center;color:var(--text3);flex-shrink:0;font-size:16px">＋</span>' +
+    '<input id="goal-add-input" placeholder="目標を追加…（Enterで追加）" onkeydown="if(event.key===\'Enter\')addGoal(this.value)" style="flex:1;min-width:0;border:none;background:transparent;color:var(--text);font-size:14px;outline:none;padding:2px 0;font-family:inherit">' +
+  '</div>';
+  el.innerHTML = html;
 }
 
 function updateDashboard() {
