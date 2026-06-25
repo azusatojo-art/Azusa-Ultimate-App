@@ -474,6 +474,7 @@
     <div id="home-quick-btns" style="display:flex;gap:8px;padding:0 12px 8px">
       <button onclick="openMealSelect()" style="flex:1;padding:10px;border-radius:10px;border:0.5px solid var(--border);background:var(--card);color:var(--text);font-size:13px;font-weight:600;cursor:pointer">🍽 ご飯を記録</button>
       <button onclick="openExerciseOverlay()" style="flex:1;padding:10px;border-radius:10px;border:0.5px solid var(--border);background:var(--card);color:var(--text);font-size:13px;font-weight:600;cursor:pointer">💪 運動を記録</button>
+      <button onclick="startSoloPomo()" style="flex:1;padding:10px;border-radius:10px;border:0.5px solid var(--border);background:var(--card);color:var(--text);font-size:13px;font-weight:600;cursor:pointer">🍅 ポモ単体</button>
     </div>
   </div>
 
@@ -1995,6 +1996,7 @@ function renderHome() {
   const container = document.getElementById('routine-list');
   container.innerHTML = '';
   routines.forEach(r => {
+    if (r.id === 'solo_pomo') return; // ポモ単体はホーム一覧に出さない
     const prog = getRoutineProgress(r);
     const pct = prog.total > 0 ? (prog.done / prog.total * 100) : 0;
     const totalMin = getRoutineTotalMin(r);
@@ -2460,6 +2462,26 @@ function addTime(sec) {
 function onTaskMemoInput(v) {
   if (!timerState.taskMemos) timerState.taskMemos = {};
   timerState.taskMemos[timerState.taskIndex] = v;
+}
+
+// ===== ポモ単体（ルーティンなしで、ポモだけ回す） =====
+function startSoloPomo() {
+  var rid = 'solo_pomo';
+  var focusMin = pomoMode, breakMin = (pomoMode === 25 ? 5 : 8);
+  var tasks = [
+    { id:'sp_f', name:'集中 '+focusMin+'分', duration:focusMin, note:'ポモドーロ' },
+    { id:'sp_b', name:'休憩 '+breakMin+'分', duration:breakMin, note:'休憩タスクを選んでね' }
+  ];
+  var r = routines.find(function(x){ return x.id === rid; });
+  if (!r) { r = { id:rid, name:'ポモ単体', icon:'🍅', type:'work', tasks:tasks }; routines.push(r); }
+  else { r.tasks = tasks; }
+  // 今日ぶんの状態をリセット（毎回まっさらで始める）
+  var dk = todayKey();
+  localStorage.removeItem('azusa_today_extra_' + rid + '_' + dk);
+  localStorage.removeItem('azusa_today_order_' + rid + '_' + dk);
+  todayProgress[rid] = [];
+  saveData();
+  startRoutine(rid);
 }
 
 // ===== ポモを1セットずつ追加（その日の進み具合に合わせて） =====
@@ -3185,6 +3207,7 @@ function renderEdit() {
   container.innerHTML = '';
 
   routines.forEach((r, ri) => {
+    if (r.id === 'solo_pomo') return; // ポモ単体は編集一覧に出さない
     const card = document.createElement('div');
     card.className = 'edit-routine-card';
     card.innerHTML = `
@@ -4361,6 +4384,52 @@ function deleteEditLogEntry() {
   renderLog();
 }
 
+// ===== ログを直接（インライン）編集 =====
+// 時刻("HH:MM")を、元の日付を保ったまま差し替える
+function _applyHHMM(iso, hhmm) {
+  var d = new Date(iso || Date.now());
+  var p = hhmm.split(':');
+  d.setHours(parseInt(p[0]) || 0, parseInt(p[1]) || 0, 0, 0);
+  return d.toISOString();
+}
+function inlineSetTime(type, id, meal, which, val) {
+  if (!val) return;
+  if (type === 'tracking') {
+    var log = ensureTrackingIds();
+    var e = log.find(function(l){ return String(l.id) === String(id); });
+    if (!e) return;
+    if (which === 'end') e.end = _applyHHMM(e.end, val); else e.start = _applyHHMM(e.start, val);
+    if (new Date(e.end) < new Date(e.start)) { // 終了が前なら入れ替え防止＝最低1分
+      if (which === 'end') e.end = new Date(new Date(e.start).getTime() + 60000).toISOString();
+    }
+    e.elapsedMin = Math.max(1, Math.round((new Date(e.end) - new Date(e.start)) / 60000));
+    saveTrackingLog(log);
+  } else if (type === 'food') {
+    var day = {}; try { day = JSON.parse(localStorage.getItem(id) || '{}'); } catch(ex) {}
+    if (day.food && day.food[meal]) { day.food[meal].time = _applyHHMM(day.food[meal].time, val); localStorage.setItem(id, JSON.stringify(day)); }
+  } else if (type === 'exercise') {
+    var arr = []; try { arr = JSON.parse(localStorage.getItem('azusa_exercise_log') || '[]'); } catch(ex) {}
+    var ix = arr.findIndex(function(l){ return String(l.id) === String(id); });
+    if (ix >= 0) { arr[ix].date = _applyHHMM(arr[ix].date, val); localStorage.setItem('azusa_exercise_log', JSON.stringify(arr)); }
+  }
+  typeof syncToCloud === 'function' && syncToCloud();
+  renderLog();
+}
+function inlineDeleteEntry(type, id, meal) {
+  if (!confirm('この記録を削除する？')) return;
+  if (type === 'tracking') {
+    saveTrackingLog(ensureTrackingIds().filter(function(l){ return String(l.id) !== String(id); }));
+  } else if (type === 'food') {
+    var day = {}; try { day = JSON.parse(localStorage.getItem(id) || '{}'); } catch(ex) {}
+    if (day.food) { delete day.food[meal]; localStorage.setItem(id, JSON.stringify(day)); }
+  } else if (type === 'exercise') {
+    var arr = []; try { arr = JSON.parse(localStorage.getItem('azusa_exercise_log') || '[]'); } catch(ex) {}
+    localStorage.setItem('azusa_exercise_log', JSON.stringify(arr.filter(function(l){ return String(l.id) !== String(id); })));
+  }
+  typeof syncToCloud === 'function' && syncToCloud();
+  renderLog();
+}
+
 // 日ごとの自由メモ（Notion的なメモを書ける）
 function getDayMemo(day) { return localStorage.getItem('azusa_daymemo_' + day) || ''; }
 function saveDayMemo(day, text) {
@@ -4437,34 +4506,51 @@ function renderLog() {
   var typeColor = { task:'var(--text)', tracking:'#40916c', food:'#e8a830', exercise:'#4a9eca' };
 
   container.innerHTML = Object.keys(byDay).sort().reverse().map(function(day) {
-    var entries = byDay[day].sort(function(a,b){ return new Date(a.time) - new Date(b.time); });
+    // 時系列（早い順）に並べる。時刻が不正なものは最後に回す
+    var entries = byDay[day].sort(function(a,b){
+      var ta = new Date(a.time).getTime(); var tb = new Date(b.time).getTime();
+      if (isNaN(ta)) ta = Infinity; if (isNaN(tb)) tb = Infinity;
+      return ta - tb;
+    });
     var safeDayId = day.replace(/\//g, '-');
 
     var rows = entries.map(function(e) {
       var d = new Date(e.time);
-      var hhmm = fmtTime(d).replace(':', '');
-      var endHhmm = e.endTime ? '~' + fmtTime(new Date(e.endTime)).replace(':', '') : '';
-      var timeStr = hhmm + endHhmm;
       var color = typeColor[e.type] || 'var(--text)';
       var icon = typeIcon[e.type] || '•';
-      // 各記録は後から編集できるよう✏️ボタンを出す
-      var ebStyle = 'flex-shrink:0;background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:2px 4px';
-      var editBtn = '';
-      if (e.type === 'tracking' && e.id != null) {
-        editBtn = '<button onclick="openEditTracking(\'' + e.id + '\')" style="' + ebStyle + '">✏️</button>';
-      } else if (e.type === 'food' && e.dayKey) {
-        editBtn = '<button onclick="openEditFood(\'' + e.dayKey + '\',\'' + String(e.meal).replace(/'/g, "\\'") + '\')" style="' + ebStyle + '">✏️</button>';
-      } else if (e.type === 'exercise' && e.id != null) {
-        editBtn = '<button onclick="openEditExercise(\'' + e.id + '\')" style="' + ebStyle + '">✏️</button>';
-      }
       var memoHtml = (e.memo && String(e.memo).trim())
-        ? '<div style="margin:2px 0 6px 98px;font-size:12px;color:var(--text2);background:var(--bg2);border-radius:8px;padding:6px 10px;white-space:pre-wrap">📝 ' + _escMemo(e.memo) + '</div>'
+        ? '<div style="margin:2px 0 6px 12px;font-size:12px;color:var(--text2);background:var(--bg2);border-radius:8px;padding:6px 10px;white-space:pre-wrap">📝 ' + _escMemo(e.memo) + '</div>'
         : '';
-      return '<div style="display:flex;align-items:baseline;gap:10px;padding:5px 0;border-bottom:0.5px solid var(--border)">' +
-        '<span style="font-size:12px;color:var(--text3);min-width:88px;flex-shrink:0;font-variant-numeric:tabular-nums">' + timeStr + '</span>' +
+      var editable = (e.type === 'tracking' && e.id != null) || (e.type === 'food' && e.dayKey) || (e.type === 'exercise' && e.id != null);
+
+      if (!editable) {
+        // 読み取り専用（ルーティンのタスクなど）
+        var hhmm = fmtTime(d).replace(':', '');
+        var endHhmm = e.endTime ? '~' + fmtTime(new Date(e.endTime)).replace(':', '') : '';
+        return '<div style="display:flex;align-items:baseline;gap:10px;padding:5px 0;border-bottom:0.5px solid var(--border)">' +
+          '<span style="font-size:12px;color:var(--text3);min-width:88px;flex-shrink:0;font-variant-numeric:tabular-nums">' + hhmm + endHhmm + '</span>' +
+          '<span style="font-size:11px;flex-shrink:0;color:' + color + '">' + icon + '</span>' +
+          '<span style="font-size:13px;color:var(--text);flex:1">' + e.name + '</span>' +
+        '</div>' + memoHtml;
+      }
+
+      // 直接編集できる行：時刻はインライン入力、✕で削除（ポップアップなし）
+      var idArg = (e.type === 'food') ? e.dayKey : String(e.id);
+      var mealArg = (e.type === 'food') ? String(e.meal).replace(/'/g, "\\'") : '';
+      var inStyle = 'border:0.5px solid var(--border2);border-radius:6px;padding:3px 5px;font-size:12px;background:var(--bg2);color:var(--text);font-variant-numeric:tabular-nums';
+      var startVal = pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+      var timeInputs = '<input type="time" value="' + startVal + '" onchange="inlineSetTime(\'' + e.type + '\',\'' + idArg + '\',\'' + mealArg + '\',\'start\',this.value)" style="' + inStyle + '">';
+      if (e.type === 'tracking') {
+        var de = new Date(e.endTime || e.time);
+        var endVal = pad2(de.getHours()) + ':' + pad2(de.getMinutes());
+        timeInputs += '<span style="color:var(--text3);font-size:11px">→</span>' +
+          '<input type="time" value="' + endVal + '" onchange="inlineSetTime(\'tracking\',\'' + idArg + '\',\'\',\'end\',this.value)" style="' + inStyle + '">';
+      }
+      return '<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:0.5px solid var(--border);flex-wrap:wrap">' +
+        timeInputs +
         '<span style="font-size:11px;flex-shrink:0;color:' + color + '">' + icon + '</span>' +
-        '<span style="font-size:13px;color:var(--text);flex:1">' + e.name + '</span>' +
-        editBtn +
+        '<span style="font-size:13px;color:var(--text);flex:1;min-width:70px">' + e.name + '</span>' +
+        '<button onclick="inlineDeleteEntry(\'' + e.type + '\',\'' + idArg + '\',\'' + mealArg + '\')" style="flex-shrink:0;background:none;border:none;color:#e74c3c;font-size:13px;cursor:pointer;padding:2px 6px">✕</button>' +
       '</div>' + memoHtml;
     }).join('');
 
