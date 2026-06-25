@@ -384,15 +384,15 @@
   <!-- 体重・体脂肪 -->
   <div class="home-module" data-block="stats" style="padding:0 12px 8px">
     <div class="dash-grid">
-      <div class="dash-card" id="dash-weight-card">
+      <div class="dash-card" id="dash-weight-card" style="cursor:pointer" onclick="showStatsOverlay()">
         <div class="dash-label">体重</div>
         <div class="dash-value" id="dash-weight">—</div>
-        <div class="dash-sub" id="dash-weight-sub">記録なし</div>
+        <div class="dash-sub" id="dash-weight-sub">タップして記録</div>
       </div>
-      <div class="dash-card" id="dash-fat-card">
+      <div class="dash-card" id="dash-fat-card" style="cursor:pointer" onclick="showStatsOverlay()">
         <div class="dash-label">体脂肪</div>
         <div class="dash-value" id="dash-fat">—</div>
-        <div class="dash-sub" id="dash-fat-sub">記録なし</div>
+        <div class="dash-sub" id="dash-fat-sub">タップして記録</div>
       </div>
     </div>
   </div>
