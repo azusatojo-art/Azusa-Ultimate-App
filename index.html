@@ -4231,7 +4231,42 @@ function hideMiniTimerBar() {
   if (miniTimerInterval) { clearInterval(miniTimerInterval); miniTimerInterval = null; }
 }
 
+// 保存済みのタイマー状態から、タイマー画面を副作用なしで作り直す（残り時間はリセットしない）
+function renderTimerFromState() {
+  var r = routines.find(function(x) { return x.id === timerState.routineId; });
+  var ordered = timerState.orderedTasks || (r ? getOrderedTasks(timerState.routineId) : null);
+  if (!r || !ordered || !ordered[timerState.taskIndex]) return false;
+  var idx = timerState.taskIndex;
+  var task = ordered[idx].task;
+  var setText = function(id, t) { var el = document.getElementById(id); if (el) el.textContent = t; };
+  setText('timer-routine-name', r.name);
+  setText('timer-routine-meta', r.icon + ' ' + r.tasks.length + 'タスク');
+  setText('task-counter', (idx + 1) + ' / ' + r.tasks.length);
+  setText('task-name-display', task.name);
+  var emojiEl = document.getElementById('task-emoji-display');
+  if (emojiEl) emojiEl.textContent = task.emoji || '';
+  var startRef = (timerState.taskStartTime instanceof Date) ? timerState.taskStartTime : new Date();
+  var startStr = fmtTime(startRef);
+  var endStr = fmtTime(new Date(startRef.getTime() + (timerState.totalSeconds || task.duration * 60) * 1000));
+  setText('task-note', (task.note ? task.note + '　' : '') + startStr + ' → ' + endStr);
+  var timeRangeEl = document.getElementById('timer-time-range');
+  if (timeRangeEl) timeRangeEl.textContent = startStr + ' → ' + endStr;
+  var next = ordered[idx + 1];
+  setText('next-up-name', next ? next.task.name : 'ルーティン終了！');
+  var nbox = document.getElementById('next-up-box');
+  if (nbox) nbox.style.display = next ? 'block' : 'none';
+  var prevBtn = document.getElementById('prev-task-btn');
+  if (prevBtn) prevBtn.style.display = idx > 0 ? 'block' : 'none';
+  var pp = document.getElementById('play-pause-btn');
+  if (pp) pp.innerHTML = '▶'; // 一時停止状態で復帰（タップで再開）
+  timerState.running = false;
+  if (typeof updateTimerDisplay === 'function') updateTimerDisplay();
+  if (typeof renderMiniList === 'function') renderMiniList();
+  return true;
+}
+
 function returnToTimer() {
+  renderTimerFromState();
   document.querySelectorAll('.view').forEach(function(v) { v.classList.remove('active'); });
   document.getElementById('view-timer').classList.add('active');
 }
@@ -4473,10 +4508,15 @@ loadNowTracking();
     timerState.taskLogs = saved.taskLogs || [];
     timerState.taskStartTime = saved.taskStartTime ? new Date(saved.taskStartTime) : null;
     timerState.orderedTasks = saved.orderedTasks;
-    // ミニバーを表示
     var ordered = saved.orderedTasks;
     var taskName = ordered && ordered[saved.taskIndex] ? ordered[saved.taskIndex].task.name : 'ルーティン中';
     showMiniTimerBar(taskName);
+    // 直近（60分以内）のタイマーなら、ホームではなくタイマー画面に自動で戻す
+    var recent = (Date.now() - saved.savedAt) < 60 * 60 * 1000;
+    if (recent && renderTimerFromState()) {
+      document.querySelectorAll('.view').forEach(function(v) { v.classList.remove('active'); });
+      document.getElementById('view-timer').classList.add('active');
+    }
   }
 })();
 </script>
