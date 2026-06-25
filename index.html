@@ -487,12 +487,13 @@
   <!-- 食事の種類を選ぶオーバーレイ -->
   <div class="meds-overlay" id="meal-select-overlay">
     <div class="meds-sheet">
-      <div style="font-size:17px;font-weight:700;margin-bottom:16px">🍽 何のご飯？</div>
+      <div style="font-size:17px;font-weight:700;margin-bottom:16px">🍽 何を記録する？</div>
       <div style="display:flex;flex-direction:column;gap:10px">
         <button onclick="closeMealSelect();openFoodLog('朝ごはん')" style="padding:14px;border-radius:12px;border:0.5px solid var(--border);background:var(--card);color:var(--text);font-size:15px;font-weight:600;cursor:pointer;text-align:left">🌅 朝ごはん</button>
         <button onclick="closeMealSelect();openFoodLog('昼ごはん')" style="padding:14px;border-radius:12px;border:0.5px solid var(--border);background:var(--card);color:var(--text);font-size:15px;font-weight:600;cursor:pointer;text-align:left">☀️ 昼ごはん</button>
         <button onclick="closeMealSelect();openFoodLog('夜ごはん')" style="padding:14px;border-radius:12px;border:0.5px solid var(--border);background:var(--card);color:var(--text);font-size:15px;font-weight:600;cursor:pointer;text-align:left">🌙 夜ごはん</button>
         <button onclick="closeMealSelect();openFoodLog('間食')" style="padding:14px;border-radius:12px;border:0.5px solid var(--border);background:var(--card);color:var(--text);font-size:15px;font-weight:600;cursor:pointer;text-align:left">🍩 間食</button>
+        <button onclick="closeMealSelect();openLatteOverlay()" style="padding:14px;border-radius:12px;border:0.5px solid var(--border);background:var(--card);color:var(--text);font-size:15px;font-weight:600;cursor:pointer;text-align:left">☕ ラテアート</button>
       </div>
       <button onclick="closeMealSelect()" style="width:100%;padding:12px;border-radius:10px;border:0.5px solid var(--border2);background:transparent;color:var(--text2);font-size:14px;cursor:pointer;margin-top:12px">キャンセル</button>
     </div>
@@ -665,6 +666,10 @@
     </div>
   </div>
   <div id="gallery-latte" style="padding:0 16px 24px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div style="font-size:13px;color:var(--text3)">ラテアートの記録</div>
+      <button onclick="openLatteOverlay()" style="padding:7px 14px;border-radius:10px;background:#8B5E3C;color:white;border:none;font-size:13px;font-weight:600;cursor:pointer">＋ 記録</button>
+    </div>
     <div id="latte-gallery-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px"></div>
     <div id="latte-gallery-empty" style="display:none;text-align:center;padding:48px 20px;color:var(--text3)">
       <div style="font-size:40px;margin-bottom:12px">☕</div>
@@ -674,7 +679,7 @@
   <div id="gallery-food" style="display:none;padding:0 16px 24px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
       <div style="font-size:13px;color:var(--text3)">食事の記録</div>
-      <button onclick="openFoodLog('朝ごはん')" style="padding:7px 14px;border-radius:10px;background:var(--accent);color:white;border:none;font-size:13px;font-weight:600;cursor:pointer">＋ 記録</button>
+      <button onclick="openMealSelect()" style="padding:7px 14px;border-radius:10px;background:var(--accent);color:white;border:none;font-size:13px;font-weight:600;cursor:pointer">＋ 記録</button>
     </div>
     <div id="food-gallery-list"></div>
     <div id="food-gallery-empty" style="display:none;text-align:center;padding:48px 20px;color:var(--text3)">
