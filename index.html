@@ -381,7 +381,8 @@
     </div>
   </div>
 
-  <div class="dashboard home-module" id="dashboard" data-block="dashboard">
+  <!-- 体重・体脂肪 -->
+  <div class="home-module" data-block="stats" style="padding:0 12px 8px">
     <div class="dash-grid">
       <div class="dash-card" id="dash-weight-card">
         <div class="dash-label">体重</div>
@@ -394,7 +395,10 @@
         <div class="dash-sub" id="dash-fat-sub">記録なし</div>
       </div>
     </div>
-    <div class="dash-card" id="dash-weather-card" style="margin-bottom:8px">
+  </div>
+  <!-- 天気 -->
+  <div class="home-module" data-block="weather" style="padding:0 12px 8px">
+    <div class="dash-card" id="dash-weather-card">
       <div class="dash-weather">
         <div class="dash-weather-icon" id="dash-weather-icon">🌤</div>
         <div class="dash-weather-info">
@@ -407,7 +411,10 @@
         </div>
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+  </div>
+  <!-- コンサータ・コーヒー -->
+  <div class="home-module" data-block="meds" style="padding:0 12px 8px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       <div class="dash-card" style="cursor:pointer" onclick="openMedsLog()">
         <div class="dash-label">コンサータ</div>
         <div id="dash-meds-value" style="font-size:18px;font-weight:700;margin-top:2px">—</div>
@@ -425,14 +432,20 @@
         <div style="font-size:11px;color:var(--text3);margin-top:4px">杯</div>
       </div>
     </div>
-    <div class="dash-card" id="dash-goal-card" style="margin-bottom:4px">
+  </div>
+  <!-- 今週の目標 -->
+  <div class="home-module" data-block="goal" style="padding:0 12px 8px">
+    <div class="dash-card" id="dash-goal-card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
         <div class="dash-label">今週の目標</div>
         <button onclick="editWeeklyGoal()" style="font-size:11px;color:var(--accent);background:none;border:none;cursor:pointer;font-weight:600">編集</button>
       </div>
       <div id="dash-goal-text" style="font-size:14px;color:var(--text);line-height:1.6"></div>
     </div>
-    <div class="dash-card" style="margin-bottom:4px" onclick="openCycleTracker()">
+  </div>
+  <!-- 妊活・生理トラッカー -->
+  <div class="home-module" data-block="cycle" style="padding:0 12px 8px">
+    <div class="dash-card" onclick="openCycleTracker()">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <div class="dash-label">妊活・生理トラッカー</div>
         <button onclick="event.stopPropagation();openCycleLog()" style="font-size:11px;color:var(--pink, #d4537e);background:none;border:none;cursor:pointer;font-weight:600">記録</button>
@@ -2085,7 +2098,11 @@ function renderHome() {
 // ===== ホーム編集モード（モジュールの並べ替え・非表示・復活） =====
 var HOME_BLOCK_LABELS = {
   gcal: '📅 今日の予定',
-  dashboard: '📊 ダッシュボード（体重・天気・コンサータ等）',
+  stats: '⚖️ 体重・体脂肪',
+  weather: '🌤 天気',
+  meds: '💊 コンサータ・コーヒー',
+  goal: '🎯 今週の目標',
+  cycle: '🌸 妊活・生理トラッカー',
   frog: '🐸 今日のカエル',
   hormone: '🌸 ホルモン予報',
   quick: '⚡ クイック記録',
@@ -2093,7 +2110,7 @@ var HOME_BLOCK_LABELS = {
   routines: '📋 ルーティン',
   break: '☕ 休憩タスク管理'
 };
-var HOME_BLOCK_DEFAULT = ['gcal','dashboard','frog','hormone','quick','now','routines','break'];
+var HOME_BLOCK_DEFAULT = ['gcal','stats','weather','meds','goal','cycle','frog','hormone','quick','now','routines','break'];
 var homeEditMode = false;
 
 function getHomeLayout() {
@@ -2101,6 +2118,10 @@ function getHomeLayout() {
   try { order = JSON.parse(localStorage.getItem('azusa_home_order') || 'null'); } catch(e) {}
   try { hidden = JSON.parse(localStorage.getItem('azusa_home_hidden') || 'null'); } catch(e) {}
   if (!Array.isArray(order)) order = HOME_BLOCK_DEFAULT.slice();
+  // 旧「dashboard」1かたまりを、5つの個別モジュールに置き換える（移行）
+  var di = order.indexOf('dashboard');
+  if (di >= 0) order.splice(di, 1, 'stats', 'weather', 'meds', 'goal', 'cycle');
+  order = order.filter(function(id) { return id !== 'dashboard'; });
   // 既知のモジュールが順序リストに無ければ末尾に足す（将来モジュールが増えても安全）
   HOME_BLOCK_DEFAULT.forEach(function(id) { if (order.indexOf(id) < 0) order.push(id); });
   if (!Array.isArray(hidden)) hidden = [];
