@@ -2531,9 +2531,10 @@ function finishRoutine() {
   const r = routines.find(x => x.id === timerState.routineId);
 
   // セッションを最終保存（途中保存と同じ1件を更新。重複作成しない）
-  persistSession();
+  try { persistSession(); } catch(e) {}
 
-  document.getElementById('complete-title').textContent = r.name + ' 完了！';
+  var rname = r ? r.name : 'ルーティン';
+  document.getElementById('complete-title').textContent = rname + ' 完了！';
   document.getElementById('complete-tasks').textContent = timerState.completedTasks;
   document.getElementById('complete-time').textContent = elapsed + '分';
   document.getElementById('complete-overlay').classList.add('show');
@@ -2555,10 +2556,15 @@ function exitTimer() {
 
 function renderMiniList() {
   const r = routines.find(x => x.id === timerState.routineId);
-  const ordered = timerState.orderedTasks || (r ? getOrderedTasks(timerState.routineId) : null);
+  let ordered = timerState.orderedTasks || (r ? getOrderedTasks(timerState.routineId) : null);
   if (!ordered || !ordered.length) return;
+  // 壊れたエントリ（中身欠け）があれば除外して落ちないようにする
+  if (ordered.some(function(e){ return !e || !e.task; })) {
+    ordered = ordered.filter(function(e){ return e && e.task; });
+  }
   const done = todayProgress[timerState.routineId] || [];
   const container = document.getElementById('task-list-mini');
+  if (!container) return;
   container.innerHTML = ordered.map((entry, i) => {
     const t = entry.task;
     const isDone = done.includes(entry.origIndex);
