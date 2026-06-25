@@ -4504,6 +4504,8 @@ loadNowTracking();
 // ページロード時にタイマー状態を復元
 (function() {
   var saved = restoreTimerState();
+  // 終わっている（残り0以下の）タイマーは復元しない＝00:00で復活する事故を防ぐ
+  if (saved && !(saved.secondsLeft > 0)) { clearTimerState(); saved = false; }
   if (saved) {
     timerState.routineId = saved.routineId;
     timerState.taskIndex = saved.taskIndex;
