@@ -2568,10 +2568,17 @@ function finishRoutine() {
   document.getElementById('complete-time').textContent = elapsed + '分';
   document.getElementById('complete-overlay').classList.add('show');
   speak('ルーティン完了！おつかれさま！');
+
+  // 完了したのでタイマー状態をクリア（ホームに「タイマー実行中」を残さない）
+  if (typeof hideMiniTimerBar === 'function') hideMiniTimerBar();
+  if (typeof clearTimerState === 'function') clearTimerState();
+  timerState.routineId = null;
+  timerState.running = false;
 }
 
 function closeComplete() {
   document.getElementById('complete-overlay').classList.remove('show');
+  if (typeof hideMiniTimerBar === 'function') hideMiniTimerBar();
   showView('home');
 }
 
