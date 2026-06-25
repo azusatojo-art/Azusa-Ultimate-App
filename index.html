@@ -2562,7 +2562,7 @@ function startBreathing(routineId) {
   var label = document.getElementById('breath-routine-label');
   if (label) label.textContent = r ? r.icon + ' ' + r.name + ' をはじめます' : 'ルーティンをはじめます';
   document.getElementById('breath-overlay').classList.add('show');
-  runBreathCycle(0, 3, routineId);
+  runBreathCycle(0, 1, routineId);
 }
 
 function runBreathCycle(count, total, routineId) {
@@ -2581,7 +2581,7 @@ function runBreathCycle(count, total, routineId) {
   // Inhale
   instr.textContent = '吸って...';
   emoji.textContent = '🌿';
-  ring.style.transition = 'transform 4s ease-in-out';
+  ring.style.transition = 'transform 3s ease-in-out';
   ring.style.transform = 'scale(1.35)';
   // no voice
 
@@ -2589,14 +2589,14 @@ function runBreathCycle(count, total, routineId) {
     // Exhale
     instr.textContent = '吐いて...';
     emoji.textContent = '💨';
-    ring.style.transition = 'transform 4s ease-in-out';
+    ring.style.transition = 'transform 3s ease-in-out';
     ring.style.transform = 'scale(1)';
     // no voice
 
     setTimeout(function() {
       runBreathCycle(count + 1, total, routineId);
-    }, 4200);
-  }, 4200);
+    }, 3200);
+  }, 3200);
 }
 
 function skipBreath() {
