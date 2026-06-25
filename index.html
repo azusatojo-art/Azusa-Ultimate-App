@@ -2355,7 +2355,7 @@ function completeTask() {
     }
   }
 
-  saveData();
+  persistSession(); // 1タスク完了ごとにログを保存（途中で抜けても残る）
 
   if (timerState.taskIndex + 1 >= ordered3.length) {
     finishRoutine();
@@ -2382,6 +2382,7 @@ function skipTask() {
     end: new Date().toISOString(),
     skipped: true,
   });
+  persistSession();
   if (timerState.taskIndex + 1 >= ordered4.length) {
     finishRoutine();
   } else {
@@ -2416,9 +2417,31 @@ function prevTask() {
   }
 
   timerState.completedTasks = Math.max(0, timerState.completedTasks - 1);
-  saveData();
+  persistSession(); // 戻した分を保存済みログにも反映
   loadTask(prevIndex);
   document.getElementById('timer-label-sm').textContent = '残り時間';
+}
+
+// 進行中セッションのログを随時保存する（タスク完了ごとに呼ぶ）。
+// sessionStart を一意IDにして、同じセッションは1件を更新し続ける（重複させない）。
+function persistSession() {
+  if (!timerState.routineId || !timerState.sessionStart) return;
+  var r = routines.find(function(x) { return x.id === timerState.routineId; });
+  var elapsed = Math.round((Date.now() - timerState.sessionStart) / 60000);
+  var entry = logs.find(function(l) { return l.sessionId === timerState.sessionStart; });
+  if (!entry) {
+    entry = {
+      sessionId: timerState.sessionStart,
+      date: new Date(timerState.sessionStart).toISOString(),
+      routineId: timerState.routineId,
+      routineName: r ? r.name : ''
+    };
+    logs.unshift(entry);
+  }
+  entry.completedTasks = timerState.completedTasks;
+  entry.elapsedMin = elapsed;
+  entry.taskLogs = timerState.taskLogs;
+  saveData();
 }
 
 function finishRoutine() {
@@ -2428,15 +2451,8 @@ function finishRoutine() {
   const elapsed = timerState.sessionStart ? Math.round((Date.now() - timerState.sessionStart) / 60000) : 0;
   const r = routines.find(x => x.id === timerState.routineId);
 
-  logs.unshift({
-    date: new Date().toISOString(),
-    routineId: timerState.routineId,
-    routineName: r ? r.name : '',
-    completedTasks: timerState.completedTasks,
-    elapsedMin: elapsed,
-    taskLogs: timerState.taskLogs,
-  });
-  saveData();
+  // セッションを最終保存（途中保存と同じ1件を更新。重複作成しない）
+  persistSession();
 
   document.getElementById('complete-title').textContent = r.name + ' 完了！';
   document.getElementById('complete-tasks').textContent = timerState.completedTasks;
