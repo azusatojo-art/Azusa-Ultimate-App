@@ -572,6 +572,14 @@
     <!-- このタスクのメモ -->
     <textarea id="task-memo-input" oninput="onTaskMemoInput(this.value)" placeholder="📝 このタスクのメモ（何やった・反省・感想…）" style="width:100%;min-height:42px;border:0.5px solid var(--border2);border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.6;background:var(--bg2);color:var(--text);margin-bottom:12px;resize:vertical;font-family:inherit"></textarea>
 
+    <!-- ポモを1セットずつ追加 -->
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <span style="font-size:12px;color:var(--text3);flex-shrink:0">🍅 ポモ追加</span>
+      <button id="pomo-mode-40" onclick="setPomoMode(40)" style="padding:6px 12px;border-radius:8px;border:0.5px solid var(--border2);background:var(--bg2);color:var(--text2);font-size:12px;font-weight:600;cursor:pointer">40分+休8</button>
+      <button id="pomo-mode-25" onclick="setPomoMode(25)" style="padding:6px 12px;border-radius:8px;border:0.5px solid var(--border2);background:var(--bg2);color:var(--text2);font-size:12px;font-weight:600;cursor:pointer">25分+休5</button>
+      <button onclick="addPomoSet()" style="flex:1;min-width:120px;padding:7px 12px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:12px;font-weight:700;cursor:pointer">＋ 1セット追加</button>
+    </div>
+
     <!-- 全体終了時間 -->
     <div style="display:flex;gap:16px;margin-bottom:12px;font-size:12px;color:var(--text3)">
       <span>全体終了 <strong id="routine-end-time" style="color:var(--text);font-size:14px">—</strong></span>
@@ -2241,6 +2249,7 @@ function loadTask(index) {
   // このタスクのメモを読み込む
   var memoEl = document.getElementById('task-memo-input');
   if (memoEl) memoEl.value = (timerState.taskMemos && timerState.taskMemos[index]) || '';
+  if (typeof updatePomoModeBtns === 'function') updatePomoModeBtns();
 
   updateTimerDisplay();
   renderMiniList();
@@ -2424,6 +2433,49 @@ function addTime(sec) {
 function onTaskMemoInput(v) {
   if (!timerState.taskMemos) timerState.taskMemos = {};
   timerState.taskMemos[timerState.taskIndex] = v;
+}
+
+// ===== ポモを1セットずつ追加（その日の進み具合に合わせて） =====
+var pomoMode = 40;
+try { pomoMode = parseInt(localStorage.getItem('azusa_pomo_mode')) || 40; } catch(e) {}
+function setPomoMode(m) {
+  pomoMode = m;
+  localStorage.setItem('azusa_pomo_mode', m);
+  updatePomoModeBtns();
+}
+function updatePomoModeBtns() {
+  var b40 = document.getElementById('pomo-mode-40'), b25 = document.getElementById('pomo-mode-25');
+  if (!b40 || !b25) return;
+  var on = function(b){ b.style.background='var(--accent)'; b.style.color='#fff'; b.style.borderColor='var(--accent)'; };
+  var off = function(b){ b.style.background='var(--bg2)'; b.style.color='var(--text2)'; b.style.borderColor='var(--border2)'; };
+  (pomoMode===40?on:off)(b40);
+  (pomoMode===25?on:off)(b25);
+}
+function addPomoSet() {
+  var rid = timerState.routineId;
+  var r = routines.find(function(x){ return x.id === rid; });
+  if (!r) return;
+  var focusMin = pomoMode, breakMin = (pomoMode === 25 ? 5 : 8);
+  var key = 'azusa_today_extra_' + rid + '_' + todayKey();
+  var extras = getTodayExtraTasks(rid);
+  var baseOrig = r.tasks.length + extras.length; // allTasks(=r.tasks+extras) 内の新タスクの位置
+  var stamp = Date.now();
+  extras.push({ id:'pomo_'+stamp+'_f', name:'集中 '+focusMin+'分', duration:focusMin, todayOnly:true, note:'ポモドーロ' });
+  extras.push({ id:'pomo_'+stamp+'_b', name:'休憩 '+breakMin+'分', duration:breakMin, todayOnly:true, note:'休憩タスクを選んでね' });
+  localStorage.setItem(key, JSON.stringify(extras));
+  // いまの並びの「今のタスクの直後」に挿入する
+  var orderOrigs = (timerState.orderedTasks || getOrderedTasks(rid)).map(function(e){ return e.origIndex; });
+  var pos = (typeof timerState.taskIndex === 'number' && timerState.taskIndex >= 0) ? timerState.taskIndex : orderOrigs.length - 1;
+  orderOrigs.splice(pos + 1, 0, baseOrig, baseOrig + 1);
+  saveTodayTaskOrder(rid, orderOrigs);
+  timerState.orderedTasks = getOrderedTasks(rid);
+  // 表示更新（次へ・一覧・終了予定）
+  var next = timerState.orderedTasks[timerState.taskIndex + 1];
+  var nm = document.getElementById('next-up-name');
+  if (nm) nm.textContent = (next && next.task) ? next.task.name : 'ルーティン終了！';
+  if (typeof renderMiniList === 'function') renderMiniList();
+  if (typeof updateTimerDisplay === 'function') updateTimerDisplay();
+  speak('ポモを1セット追加したよ');
 }
 
 function completeTask() {
