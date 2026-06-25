@@ -2569,6 +2569,7 @@ function runBreathCycle(count, total, routineId) {
   if (count >= total) {
     document.getElementById('breath-overlay').classList.remove('show');
     loadTask(0);
+    if (!timerState.running) togglePlayPause(); // 深呼吸が終わったら自動でカウント開始
     return;
   }
   var ring = document.getElementById('breath-ring');
@@ -2604,6 +2605,7 @@ function skipBreath() {
   if (window.speechSynthesis) window.speechSynthesis.cancel();
   var rid = timerState.routineId;
   loadTask(0);
+  if (!timerState.running) togglePlayPause(); // スキップ時も自動でカウント開始
 }
 
 function startIdleTimer(taskName) {
