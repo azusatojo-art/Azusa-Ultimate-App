@@ -1853,6 +1853,11 @@ function displayWeather(w) {
   document.getElementById('dash-weather-feels').textContent = '体感 ' + w.feels + '°C　風 ' + w.wind + 'km/h';
 }
 
+// Googleカレンダー連携は未実装（ボタンだけの状態）。押しても無反応で混乱するので案内を出す。
+function gcalSignIn() {
+  alert('Googleカレンダー連携は準備中だよ🙏\nこの機能はまだ中身が作られていません。使いたくなったら教えてね（セットアップから一緒にやります）。');
+}
+
 function reverseGeocode(lat, lon) {
   fetch('https://nominatim.openstreetmap.org/reverse?lat=' + lat + '&lon=' + lon + '&format=json&accept-language=ja')
     .then(function(r) { return r.json(); })
