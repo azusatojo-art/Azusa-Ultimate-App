@@ -758,6 +758,26 @@
   </div>
 </div>
 
+<!-- 食事・運動の記録 編集オーバーレイ -->
+<div class="meds-overlay" id="edit-logentry-overlay">
+  <div class="meds-sheet">
+    <div id="edit-logentry-title" style="font-size:17px;font-weight:700;margin-bottom:14px">記録を編集</div>
+    <div id="edit-logentry-menu-wrap">
+      <label id="edit-logentry-text-label" style="font-size:12px;color:var(--text3)">メニュー</label>
+      <input id="edit-logentry-text" style="width:100%;border:0.5px solid var(--border2);border-radius:8px;padding:11px 12px;font-size:15px;background:var(--bg2);color:var(--text);margin:4px 0 12px">
+    </div>
+    <div id="edit-logentry-dur-wrap" style="display:none">
+      <label style="font-size:12px;color:var(--text3)">所要時間（分）</label>
+      <input type="number" id="edit-logentry-dur" min="1" style="width:100%;border:0.5px solid var(--border2);border-radius:8px;padding:11px 12px;font-size:15px;background:var(--bg2);color:var(--text);margin:4px 0 12px">
+    </div>
+    <label style="font-size:12px;color:var(--text3)">時刻</label>
+    <input type="datetime-local" id="edit-logentry-time" style="width:100%;border:0.5px solid var(--border2);border-radius:8px;padding:11px 12px;font-size:15px;background:var(--bg2);color:var(--text);margin:4px 0 16px">
+    <button onclick="saveEditLogEntry()" style="width:100%;padding:13px;border-radius:8px;background:var(--accent);color:white;border:none;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:8px">保存する</button>
+    <button onclick="deleteEditLogEntry()" style="width:100%;padding:11px;border-radius:8px;border:1px solid #e74c3c;background:transparent;color:#e74c3c;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px">✕ 削除</button>
+    <button onclick="closeEditLogEntry()" style="width:100%;padding:11px;border-radius:8px;border:0.5px solid var(--border2);background:transparent;color:var(--text2);font-size:14px;cursor:pointer">キャンセル</button>
+  </div>
+</div>
+
 <!-- LATTE ART OVERLAY -->
 <div class="meds-overlay" id="latte-overlay">
   <div class="meds-sheet">
@@ -4104,6 +4124,86 @@ function deleteEditTracking() {
   renderLog();
 }
 
+// ===== 食事・運動の記録を編集／削除 =====
+var editingLog = null;
+function openEditFood(dayKey, meal) {
+  var day = {};
+  try { day = JSON.parse(localStorage.getItem(dayKey) || '{}'); } catch(e) {}
+  var f = day.food && day.food[meal];
+  if (!f) return;
+  editingLog = { type: 'food', dayKey: dayKey, meal: meal };
+  document.getElementById('edit-logentry-title').textContent = '🍽 ' + meal + ' の記録';
+  document.getElementById('edit-logentry-text-label').textContent = 'メニュー';
+  document.getElementById('edit-logentry-menu-wrap').style.display = 'block';
+  document.getElementById('edit-logentry-text').value = f.menu || '';
+  document.getElementById('edit-logentry-dur-wrap').style.display = 'none';
+  document.getElementById('edit-logentry-time').value = f.time ? toLocalInput(f.time) : '';
+  document.getElementById('edit-logentry-overlay').classList.add('show');
+}
+function openEditExercise(id) {
+  var arr = [];
+  try { arr = JSON.parse(localStorage.getItem('azusa_exercise_log') || '[]'); } catch(e) {}
+  var ex = arr.find(function(l) { return String(l.id) === String(id); });
+  if (!ex) return;
+  editingLog = { type: 'exercise', id: ex.id };
+  document.getElementById('edit-logentry-title').textContent = '💪 ' + (ex.type || '運動') + ' の記録';
+  document.getElementById('edit-logentry-text-label').textContent = 'メモ';
+  document.getElementById('edit-logentry-menu-wrap').style.display = 'block';
+  document.getElementById('edit-logentry-text').value = ex.note || '';
+  document.getElementById('edit-logentry-dur-wrap').style.display = 'block';
+  document.getElementById('edit-logentry-dur').value = ex.duration || '';
+  document.getElementById('edit-logentry-time').value = ex.date ? toLocalInput(ex.date) : '';
+  document.getElementById('edit-logentry-overlay').classList.add('show');
+}
+function closeEditLogEntry() {
+  document.getElementById('edit-logentry-overlay').classList.remove('show');
+  editingLog = null;
+}
+function saveEditLogEntry() {
+  if (!editingLog) return;
+  var timeVal = document.getElementById('edit-logentry-time').value;
+  if (editingLog.type === 'food') {
+    var day = {};
+    try { day = JSON.parse(localStorage.getItem(editingLog.dayKey) || '{}'); } catch(e) {}
+    if (day.food && day.food[editingLog.meal]) {
+      day.food[editingLog.meal].menu = document.getElementById('edit-logentry-text').value;
+      if (timeVal) day.food[editingLog.meal].time = new Date(timeVal).toISOString();
+      localStorage.setItem(editingLog.dayKey, JSON.stringify(day));
+    }
+  } else if (editingLog.type === 'exercise') {
+    var arr = [];
+    try { arr = JSON.parse(localStorage.getItem('azusa_exercise_log') || '[]'); } catch(e) {}
+    var idx = arr.findIndex(function(l) { return String(l.id) === String(editingLog.id); });
+    if (idx >= 0) {
+      arr[idx].note = document.getElementById('edit-logentry-text').value;
+      var dur = parseInt(document.getElementById('edit-logentry-dur').value);
+      if (!isNaN(dur) && dur > 0) arr[idx].duration = dur;
+      if (timeVal) arr[idx].date = new Date(timeVal).toISOString();
+      localStorage.setItem('azusa_exercise_log', JSON.stringify(arr));
+    }
+  }
+  typeof syncToCloud === 'function' && syncToCloud();
+  closeEditLogEntry();
+  renderLog();
+}
+function deleteEditLogEntry() {
+  if (!editingLog) return;
+  if (!confirm('この記録を削除する？')) return;
+  if (editingLog.type === 'food') {
+    var day = {};
+    try { day = JSON.parse(localStorage.getItem(editingLog.dayKey) || '{}'); } catch(e) {}
+    if (day.food) { delete day.food[editingLog.meal]; localStorage.setItem(editingLog.dayKey, JSON.stringify(day)); }
+  } else if (editingLog.type === 'exercise') {
+    var arr = [];
+    try { arr = JSON.parse(localStorage.getItem('azusa_exercise_log') || '[]'); } catch(e) {}
+    arr = arr.filter(function(l) { return String(l.id) !== String(editingLog.id); });
+    localStorage.setItem('azusa_exercise_log', JSON.stringify(arr));
+  }
+  typeof syncToCloud === 'function' && syncToCloud();
+  closeEditLogEntry();
+  renderLog();
+}
+
 function renderLog() {
   renderLogTracker();
   ensureTrackingIds();
@@ -4138,7 +4238,7 @@ function renderLog() {
         var f = food[meal];
         if (f && f.time) {
           var label = meal + (f.score ? ' ' + scoreEmoji[f.score] : '') + (f.menu ? ' (' + f.menu + ')' : '');
-          allEntries.push({ type:'food', time:f.time, name:label });
+          allEntries.push({ type:'food', time:f.time, name:label, dayKey:k, meal:meal });
         }
       });
     } catch(e) {}
@@ -4147,7 +4247,7 @@ function renderLog() {
   // 運動ログ
   try {
     JSON.parse(localStorage.getItem('azusa_exercise_log') || '[]').forEach(function(l) {
-      allEntries.push({ type:'exercise', time:l.date, name:l.type + ' ' + l.duration + '分' + (l.note ? ' — ' + l.note : '') });
+      allEntries.push({ type:'exercise', time:l.date, name:l.type + ' ' + l.duration + '分' + (l.note ? ' — ' + l.note : ''), id:l.id });
     });
   } catch(e) {}
 
@@ -4179,10 +4279,16 @@ function renderLog() {
       var timeStr = hhmm + endHhmm;
       var color = typeColor[e.type] || 'var(--text)';
       var icon = typeIcon[e.type] || '•';
-      // 時間記録（tracking）は後から編集できるよう✏️ボタンを出す
-      var editBtn = (e.type === 'tracking' && e.id != null)
-        ? '<button onclick="openEditTracking(\'' + e.id + '\')" style="flex-shrink:0;background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:2px 4px">✏️</button>'
-        : '';
+      // 各記録は後から編集できるよう✏️ボタンを出す
+      var ebStyle = 'flex-shrink:0;background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:2px 4px';
+      var editBtn = '';
+      if (e.type === 'tracking' && e.id != null) {
+        editBtn = '<button onclick="openEditTracking(\'' + e.id + '\')" style="' + ebStyle + '">✏️</button>';
+      } else if (e.type === 'food' && e.dayKey) {
+        editBtn = '<button onclick="openEditFood(\'' + e.dayKey + '\',\'' + String(e.meal).replace(/'/g, "\\'") + '\')" style="' + ebStyle + '">✏️</button>';
+      } else if (e.type === 'exercise' && e.id != null) {
+        editBtn = '<button onclick="openEditExercise(\'' + e.id + '\')" style="' + ebStyle + '">✏️</button>';
+      }
       return '<div style="display:flex;align-items:baseline;gap:10px;padding:5px 0;border-bottom:0.5px solid var(--border)">' +
         '<span style="font-size:12px;color:var(--text3);min-width:88px;flex-shrink:0;font-variant-numeric:tabular-nums">' + timeStr + '</span>' +
         '<span style="font-size:11px;flex-shrink:0;color:' + color + '">' + icon + '</span>' +
