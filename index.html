@@ -1745,6 +1745,7 @@ function saveFrogTasks(tasks) {
 }
 
 function renderFrogList() {
+  try { carryOverFrogs(); } catch(e) {}
   var tasks = getFrogTasks();
   var container = document.getElementById('frog-list');
   if (!container) return;
@@ -3517,6 +3518,10 @@ function saveMedsLog() {
   speak(currentDose === 'none' ? '記録したよ' : currentDose + '、' + fmtTime(new Date(log.medsTime)) + ' 服用で記録したよ！');
 }
 
+var CONCERTA_HOURS = 12; // コンサータの効き時間（およそ）
+// 効き時間メーターを最新に保つため1分ごとに更新
+setInterval(function() { try { updateMedsDashboard(); } catch(e) {} }, 60000);
+
 function updateMedsDashboard() {
   var log = getDailyLog();
   var el = document.getElementById('dash-meds-value');
@@ -3526,8 +3531,17 @@ function updateMedsDashboard() {
     el.textContent = log.meds === 'none' ? '飲まなかった' : log.meds;
     el.style.color = log.meds === 'none' ? 'var(--text3)' : 'var(--accent)';
     if (log.meds !== 'none' && log.medsTime) {
-      sub.textContent = fmtTime(new Date(log.medsTime)) + ' 服用';
-      sub.style.color = 'var(--accent)';
+      var taken = new Date(log.medsTime);
+      var endTime = new Date(taken.getTime() + CONCERTA_HOURS * 3600000);
+      var remainMin = Math.round((endTime - Date.now()) / 60000);
+      if (remainMin > 0) {
+        var rh = Math.floor(remainMin / 60), rm = remainMin % 60;
+        sub.textContent = fmtTime(taken) + '服用 · ' + fmtTime(endTime) + 'まで（あと' + (rh > 0 ? rh + 'h' : '') + rm + 'm）';
+        sub.style.color = remainMin <= 90 ? '#e67e22' : 'var(--accent)'; // 切れ間近はオレンジ
+      } else {
+        sub.textContent = fmtTime(taken) + '服用 · 効き終わり（' + fmtTime(endTime) + '頃）';
+        sub.style.color = 'var(--text3)';
+      }
     } else {
       sub.textContent = '記録済み';
       sub.style.color = 'var(--text3)';
@@ -4559,7 +4573,32 @@ function renderLog() {
   var typeIcon  = { task:'▶', tracking:'⏱', food:'🍽', exercise:'💪' };
   var typeColor = { task:'var(--text)', tracking:'#40916c', food:'#e8a830', exercise:'#4a9eca' };
 
-  container.innerHTML = Object.keys(byDay).sort().reverse().map(function(day) {
+  // ===== 今日のまとめ（ごほうび画面） =====
+  var _today = new Date().toDateString();
+  var sToday = { trackMin:0, pomo:0, taskDone:0, food:0, exMin:0 };
+  allEntries.forEach(function(e) {
+    if (new Date(e.time).toDateString() !== _today) return;
+    if (e.type === 'tracking' && e.endTime) sToday.trackMin += Math.max(0, (new Date(e.endTime) - new Date(e.time)) / 60000);
+    else if (e.type === 'task') { sToday.taskDone++; if (/集中|ポモ/.test(e.name)) sToday.pomo++; }
+    else if (e.type === 'food') sToday.food++;
+  });
+  try {
+    JSON.parse(localStorage.getItem('azusa_exercise_log') || '[]').forEach(function(l) {
+      if (new Date(l.date).toDateString() === _today) sToday.exMin += (parseInt(l.duration) || 0);
+    });
+  } catch(e) {}
+  var fmtHM = function(min) { min = Math.round(min); var h = Math.floor(min/60), m = min%60; return h > 0 ? (h + 'h' + (m > 0 ? m + 'm' : '')) : (m + 'm'); };
+  var chips = ['⏱ <strong>' + fmtHM(sToday.trackMin) + '</strong> トラッキング'];
+  if (sToday.pomo) chips.push('🍅 <strong>' + sToday.pomo + '</strong> ポモ');
+  chips.push('✅ <strong>' + sToday.taskDone + '</strong> タスク');
+  if (sToday.exMin) chips.push('💪 <strong>' + sToday.exMin + '</strong>分');
+  if (sToday.food) chips.push('🍽 <strong>' + sToday.food + '</strong>');
+  var summaryHtml = '<div style="background:linear-gradient(135deg,var(--accent),#52b788);border-radius:14px;padding:14px 16px;margin-bottom:16px;color:#fff">' +
+    '<div style="font-size:12px;opacity:0.85;margin-bottom:6px">📊 今日のまとめ</div>' +
+    '<div style="display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px">' + chips.map(function(c){ return '<span>' + c + '</span>'; }).join('') + '</div>' +
+  '</div>';
+
+  container.innerHTML = summaryHtml + Object.keys(byDay).sort().reverse().map(function(day) {
     // 時系列（早い順）に並べる。時刻が不正なものは最後に回す
     var entries = byDay[day].sort(function(a,b){
       var ta = new Date(a.time).getTime(); var tb = new Date(b.time).getTime();
@@ -4627,7 +4666,7 @@ function copyNotionLog(day, block) {
   var allEntries = [];
   logs.forEach(function(l) {
     (l.taskLogs||[]).forEach(function(t) {
-      if (!t.skipped) allEntries.push({ type:'task', time:t.start, endTime:t.end, name:t.name });
+      if (!t.skipped) allEntries.push({ type:'task', time:t.start, endTime:t.end, name:t.name, memo:t.memo });
     });
   });
   getNowTrackingLog().forEach(function(l) { allEntries.push({ type:'tracking', time:l.start, endTime:l.end, name:l.name }); });
@@ -4665,8 +4704,15 @@ function copyNotionLog(day, block) {
     var d=new Date(e.time);
     var hhmm=fmtTime(d).replace(':','');
     var end=e.endTime?'~'+fmtTime(new Date(e.endTime)).replace(':',''):'';
-    return hhmm+end+' '+e.name;
+    var memo = (e.memo && String(e.memo).trim()) ? '\n  📝 ' + e.memo : ''; // タスクメモも一緒に
+    return hhmm+end+' '+e.name+memo;
   }).join('\n');
+
+  // 「全部」コピーには、その日の自由メモも先頭に入れる
+  if (block === '全部') {
+    var dm = getDayMemo(day);
+    if (dm && dm.trim()) text = '📝 メモ\n' + dm + '\n\n' + text;
+  }
 
   if (!text.trim()) { alert('記録がないよ！'); return; }
   navigator.clipboard.writeText(text).then(function(){ speak('コピーしたよ！'); }).catch(function(){
@@ -5086,6 +5132,37 @@ function renderReorderPopup() {
 }
 
 // ===== カエル（予想時間対応） =====
+// 繰り越し：直近の過去日（最大7日）で未完了のカエルを、今日に1回だけ持ち越す
+function carryOverFrogs() {
+  var todayK = todayKey();
+  var flagKey = 'azusa_frog_carry_' + todayK;
+  if (localStorage.getItem(flagKey)) return; // 今日はもう繰り越し済み
+  localStorage.setItem(flagKey, '1');
+  var todayName = 'azusa_frogs_' + todayK;
+  var todayList = [];
+  try { todayList = JSON.parse(localStorage.getItem(todayName) || '[]'); } catch(e) {}
+  var now = new Date();
+  for (var back = 1; back <= 7; back++) {
+    var d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - back);
+    var key = 'azusa_frogs_' + (d.getFullYear() + '-' + (d.getMonth()+1) + '-' + d.getDate());
+    var list = [];
+    try { list = JSON.parse(localStorage.getItem(key) || '[]'); } catch(e) {}
+    if (!list.length) continue;
+    var undone = list.filter(function(t) { return !t.done; });
+    if (undone.length) {
+      var existing = todayList.map(function(t) { return t.text; });
+      undone.forEach(function(t) {
+        if (existing.indexOf(t.text) < 0) {
+          todayList.push({ text: t.text, done: false, created: new Date().toISOString(), estimatedMin: t.estimatedMin || null, carried: true });
+        }
+      });
+      localStorage.setItem(todayName, JSON.stringify(todayList));
+      typeof syncToCloud === 'function' && syncToCloud();
+    }
+    break; // 直近の1日ぶんだけ
+  }
+}
+
 function getFrogTasks() {
   var key = 'azusa_frogs_' + todayKey();
   try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch(e) { return []; }
@@ -5096,6 +5173,7 @@ function saveFrogTasks(tasks) {
   typeof syncToCloud === 'function' && syncToCloud();
 }
 function renderFrogList() {
+  try { carryOverFrogs(); } catch(e) {}
   var tasks = getFrogTasks();
   var container = document.getElementById('frog-list');
   if (!container) return;
@@ -5108,7 +5186,7 @@ function renderFrogList() {
     return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border)">' +
       '<div onclick="toggleFrog(' + i + ')" style="width:22px;height:22px;border-radius:50%;border:1.5px solid ' + (t.done ? 'var(--accent)' : 'var(--border2)') + ';background:' + (t.done ? 'var(--accent)' : 'transparent') + ';cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:white;font-size:12px">' + (t.done ? '✓' : '') + '</div>' +
       '<div style="flex:1;min-width:0">' +
-        '<div style="font-size:14px;' + (t.done ? 'text-decoration:line-through;color:var(--text3)' : 'color:var(--text)') + '">' + t.text + timeStr + '</div>' +
+        '<div style="font-size:14px;' + (t.done ? 'text-decoration:line-through;color:var(--text3)' : 'color:var(--text)') + '">' + t.text + timeStr + (t.carried ? '<span style="font-size:9px;background:var(--bg2);color:var(--text3);border-radius:5px;padding:1px 5px;margin-left:6px;text-decoration:none">🔁繰り越し</span>' : '') + '</div>' +
       '</div>' +
       '<button onclick="deleteFrog(' + i + ')" style="background:none;border:none;color:var(--text3);font-size:15px;cursor:pointer;padding:2px 4px">✕</button>' +
     '</div>';
