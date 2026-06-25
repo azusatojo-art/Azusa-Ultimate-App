@@ -707,6 +707,10 @@
 
 <!-- LOG VIEW -->
 <div id="view-log" class="view log-view">
+  <div style="padding:16px 16px 4px">
+    <div style="font-size:13px;color:var(--text3);margin-bottom:8px">⏱ タイムトラック</div>
+    <div id="log-tracker"></div>
+  </div>
   <div id="log-container"></div>
 </div>
 
@@ -745,6 +749,25 @@
     </div>
     <button onclick="saveEditStartTime()" style="width:100%;padding:13px;border-radius:8px;background:var(--accent);color:white;border:none;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:8px">変更する</button>
     <button onclick="document.getElementById('edit-start-time-overlay').classList.remove('show')" style="width:100%;padding:11px;border-radius:8px;border:0.5px solid var(--border2);background:transparent;color:var(--text2);font-size:14px;cursor:pointer">キャンセル</button>
+  </div>
+</div>
+
+<!-- 時間記録の編集オーバーレイ -->
+<div class="meds-overlay" id="edit-track-overlay">
+  <div class="meds-sheet">
+    <div style="font-size:17px;font-weight:700;margin-bottom:14px">⏱ 記録を編集</div>
+    <label style="font-size:12px;color:var(--text3)">なに してた？</label>
+    <input id="edit-track-name" placeholder="例：Notion整理" style="width:100%;border:0.5px solid var(--border2);border-radius:8px;padding:11px 12px;font-size:15px;background:var(--bg2);color:var(--text);margin:4px 0 12px">
+    <label style="font-size:12px;color:var(--text3)">開始</label>
+    <input type="datetime-local" id="edit-track-start" style="width:100%;border:0.5px solid var(--border2);border-radius:8px;padding:11px 12px;font-size:15px;background:var(--bg2);color:var(--text);margin:4px 0 12px">
+    <label style="font-size:12px;color:var(--text3)">終了</label>
+    <input type="datetime-local" id="edit-track-end" style="width:100%;border:0.5px solid var(--border2);border-radius:8px;padding:11px 12px;font-size:15px;background:var(--bg2);color:var(--text);margin:4px 0 16px">
+    <button onclick="saveEditTracking()" style="width:100%;padding:13px;border-radius:8px;background:var(--accent);color:white;border:none;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:8px">保存する</button>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <button onclick="duplicateEditTracking()" style="flex:1;padding:11px;border-radius:8px;border:0.5px solid var(--border2);background:var(--bg2);color:var(--text);font-size:14px;cursor:pointer">⧉ 複製</button>
+      <button onclick="deleteEditTracking()" style="flex:1;padding:11px;border-radius:8px;border:1px solid #e74c3c;background:transparent;color:#e74c3c;font-size:14px;font-weight:600;cursor:pointer">✕ 削除</button>
+    </div>
+    <button onclick="closeEditTracking()" style="width:100%;padding:11px;border-radius:8px;border:0.5px solid var(--border2);background:transparent;color:var(--text2);font-size:14px;cursor:pointer">キャンセル</button>
   </div>
 </div>
 
@@ -3590,11 +3613,13 @@ function updateNowTrackingUI() {
 
 function updateNowTrackingElapsed() {
   if (!nowTracking) return;
-  var el = document.getElementById('now-tracking-elapsed');
-  if (!el) return;
   var elapsed = Math.floor((Date.now() - new Date(nowTracking.startTime)) / 1000);
   var m = Math.floor(elapsed/60), s = elapsed%60;
-  el.textContent = ('0'+m).slice(-2) + ':' + ('0'+s).slice(-2);
+  var txt = ('0'+m).slice(-2) + ':' + ('0'+s).slice(-2);
+  var el = document.getElementById('now-tracking-elapsed');
+  if (el) el.textContent = txt;
+  var el2 = document.getElementById('log-tracker-elapsed'); // ログ画面の計測バー
+  if (el2) el2.textContent = txt;
 }
 
 function stopNowTracking() {
@@ -3604,11 +3629,14 @@ function stopNowTracking() {
   var elapsedMin = Math.max(1, Math.round((new Date(endTime) - new Date(nowTracking.startTime)) / 60000));
   var log = [];
   try { log = JSON.parse(localStorage.getItem(NOW_TRACKING_LOG_KEY)||'[]'); } catch(e) {}
-  log.unshift({ name: nowTracking.name, start: nowTracking.startTime, end: endTime, elapsedMin: elapsedMin });
+  log.unshift({ id: Date.now(), name: nowTracking.name, start: nowTracking.startTime, end: endTime, elapsedMin: elapsedMin });
   localStorage.setItem(NOW_TRACKING_LOG_KEY, JSON.stringify(log.slice(0, 500)));
+  typeof syncToCloud === 'function' && syncToCloud();
   localStorage.removeItem(NOW_TRACKING_KEY);
   nowTracking = null;
   updateNowTrackingUI();
+  if (typeof renderLogTracker === 'function') renderLogTracker();
+  if (document.getElementById('view-log') && document.getElementById('view-log').classList.contains('active')) renderLog();
   speak(elapsedMin + '分、記録したよ！');
 }
 
@@ -3892,8 +3920,121 @@ function fmtTime(d) {
 function getNowTrackingLog() {
   try { return JSON.parse(localStorage.getItem('azusa_tracking_log') || '[]'); } catch(e) { return []; }
 }
+function saveTrackingLog(log) {
+  localStorage.setItem(NOW_TRACKING_LOG_KEY, JSON.stringify(log.slice(0, 500)));
+  typeof syncToCloud === 'function' && syncToCloud();
+}
+// 古いエントリにidが無ければ付与（編集・削除で個体を識別するため）
+function ensureTrackingIds() {
+  var log = getNowTrackingLog();
+  var changed = false;
+  log.forEach(function(l, i) {
+    if (l.id == null) { l.id = (new Date(l.start).getTime() || Date.now()) + i; changed = true; }
+  });
+  if (changed) saveTrackingLog(log);
+  return log;
+}
+
+// ===== ログ画面の計測バー（今なにしてる？） =====
+function renderLogTracker() {
+  var el = document.getElementById('log-tracker');
+  if (!el) return;
+  if (nowTracking) {
+    var elapsed = Math.floor((Date.now() - new Date(nowTracking.startTime)) / 1000);
+    var m = Math.floor(elapsed/60), s = elapsed%60;
+    var txt = ('0'+m).slice(-2) + ':' + ('0'+s).slice(-2);
+    el.innerHTML =
+      '<div style="background:var(--accent);border-radius:12px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between">' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-size:11px;color:rgba(255,255,255,0.8);margin-bottom:2px">⏱ 計測中</div>' +
+          '<div style="font-size:15px;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + nowTracking.name + '</div>' +
+        '</div>' +
+        '<div style="text-align:right;flex-shrink:0;margin-left:12px">' +
+          '<div id="log-tracker-elapsed" style="font-size:22px;font-weight:700;color:#fff;font-variant-numeric:tabular-nums">' + txt + '</div>' +
+          '<button onclick="stopNowTracking()" style="font-size:11px;background:rgba(255,255,255,0.25);color:#fff;border:none;border-radius:6px;padding:3px 10px;cursor:pointer;margin-top:2px">■ 停止</button>' +
+        '</div>' +
+      '</div>';
+  } else {
+    el.innerHTML =
+      '<div style="display:flex;gap:8px;align-items:center">' +
+        '<input id="log-tracker-input" placeholder="今なにしてる？（計測スタート）" style="flex:1;border:0.5px solid var(--border2);border-radius:10px;padding:11px 14px;font-size:14px;background:var(--card);color:var(--text);outline:none" onkeydown="if(event.key===\'Enter\')startTrackerFromLog()">' +
+        '<button onclick="startTrackerFromLog()" style="padding:11px 16px;border-radius:10px;background:var(--accent);color:#fff;border:none;font-size:13px;font-weight:600;cursor:pointer">▶</button>' +
+      '</div>';
+  }
+}
+function startTrackerFromLog() {
+  var input = document.getElementById('log-tracker-input');
+  var name = input ? input.value.trim() : '';
+  if (!name) return;
+  nowTracking = { name: name, startTime: new Date().toISOString() };
+  localStorage.setItem(NOW_TRACKING_KEY, JSON.stringify(nowTracking));
+  updateNowTrackingUI();
+  renderLogTracker();
+}
+
+// ===== 時間記録の編集（削除・複製・時刻変更） =====
+var editingTrackId = null;
+function pad2(n) { return ('0' + n).slice(-2); }
+function toLocalInput(iso) {
+  var d = new Date(iso);
+  return d.getFullYear() + '-' + pad2(d.getMonth()+1) + '-' + pad2(d.getDate()) + 'T' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+}
+function openEditTracking(id) {
+  var log = ensureTrackingIds();
+  var item = log.find(function(l) { return String(l.id) === String(id); });
+  if (!item) return;
+  editingTrackId = item.id;
+  document.getElementById('edit-track-name').value = item.name || '';
+  document.getElementById('edit-track-start').value = item.start ? toLocalInput(item.start) : '';
+  document.getElementById('edit-track-end').value = item.end ? toLocalInput(item.end) : '';
+  document.getElementById('edit-track-overlay').classList.add('show');
+}
+function closeEditTracking() {
+  document.getElementById('edit-track-overlay').classList.remove('show');
+  editingTrackId = null;
+}
+function saveEditTracking() {
+  var log = ensureTrackingIds();
+  var idx = log.findIndex(function(l) { return String(l.id) === String(editingTrackId); });
+  if (idx < 0) { closeEditTracking(); return; }
+  var name = document.getElementById('edit-track-name').value.trim() || log[idx].name;
+  var startVal = document.getElementById('edit-track-start').value;
+  var endVal = document.getElementById('edit-track-end').value;
+  var startIso = startVal ? new Date(startVal).toISOString() : log[idx].start;
+  var endIso = endVal ? new Date(endVal).toISOString() : log[idx].end;
+  if (new Date(endIso) < new Date(startIso)) { alert('終了が開始より前になってるよ⏰'); return; }
+  var elapsed = Math.max(1, Math.round((new Date(endIso) - new Date(startIso)) / 60000));
+  log[idx].name = name;
+  log[idx].start = startIso;
+  log[idx].end = endIso;
+  log[idx].elapsedMin = elapsed;
+  saveTrackingLog(log);
+  closeEditTracking();
+  renderLog();
+}
+function duplicateEditTracking() {
+  var log = ensureTrackingIds();
+  var item = log.find(function(l) { return String(l.id) === String(editingTrackId); });
+  if (!item) return;
+  var copy = { id: Date.now(), name: item.name, start: item.start, end: item.end, elapsedMin: item.elapsedMin };
+  log.unshift(copy);
+  saveTrackingLog(log);
+  editingTrackId = copy.id; // 複製した方を続けて編集できるように
+  document.getElementById('edit-track-overlay').classList.remove('show');
+  renderLog();
+  speak('複製したよ');
+}
+function deleteEditTracking() {
+  if (!confirm('この記録を削除する？')) return;
+  var log = ensureTrackingIds().filter(function(l) { return String(l.id) !== String(editingTrackId); });
+  saveTrackingLog(log);
+  closeEditTracking();
+  renderLog();
+}
 
 function renderLog() {
+  renderLogTracker();
+  ensureTrackingIds();
   var container = document.getElementById('log-container');
 
   // 全エントリ収集
@@ -3910,7 +4051,7 @@ function renderLog() {
 
   // 今なにしてる？ログ
   getNowTrackingLog().forEach(function(l) {
-    allEntries.push({ type:'tracking', time:l.start, endTime:l.end, name:l.name });
+    allEntries.push({ type:'tracking', time:l.start, endTime:l.end, name:l.name, id:l.id });
   });
 
   // 食事ログ
@@ -3966,10 +4107,15 @@ function renderLog() {
       var timeStr = hhmm + endHhmm;
       var color = typeColor[e.type] || 'var(--text)';
       var icon = typeIcon[e.type] || '•';
+      // 時間記録（tracking）は後から編集できるよう✏️ボタンを出す
+      var editBtn = (e.type === 'tracking' && e.id != null)
+        ? '<button onclick="openEditTracking(\'' + e.id + '\')" style="flex-shrink:0;background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:2px 4px">✏️</button>'
+        : '';
       return '<div style="display:flex;align-items:baseline;gap:10px;padding:5px 0;border-bottom:0.5px solid var(--border)">' +
         '<span style="font-size:12px;color:var(--text3);min-width:88px;flex-shrink:0;font-variant-numeric:tabular-nums">' + timeStr + '</span>' +
         '<span style="font-size:11px;flex-shrink:0;color:' + color + '">' + icon + '</span>' +
         '<span style="font-size:13px;color:var(--text);flex:1">' + e.name + '</span>' +
+        editBtn +
       '</div>';
     }).join('');
 
