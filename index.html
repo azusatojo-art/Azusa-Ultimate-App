@@ -4296,11 +4296,33 @@ loadNowTracking();
 
   if ('serviceWorker' in navigator) {
     var swCode = [
-      'const CACHE = "azusa-routine-v1";',
-      'const FILES = ["./"];',
-      'self.addEventListener("install", e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES))));',
-      'self.addEventListener("fetch", e => e.respondWith(caches.match(e.request).then(r => r || fetch(e.request))));',
-    ].join(' ');
+      'const CACHE = "azusa-routine-v2";',
+      // インストールしたらすぐ新しいSWに切り替える
+      'self.addEventListener("install", e => self.skipWaiting());',
+      // 古いキャッシュは全部消して、すぐに制御を握る
+      'self.addEventListener("activate", e => e.waitUntil((async () => {',
+      '  const keys = await caches.keys();',
+      '  await Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)));',
+      '  await self.clients.claim();',
+      '})()));',
+      // ネットワーク優先：オンラインなら必ず最新を取得し、キャッシュも更新する。',
+      // オフラインのときだけキャッシュにフォールバックする。',
+      'self.addEventListener("fetch", e => {',
+      '  if (e.request.method !== "GET") return;',
+      '  e.respondWith((async () => {',
+      '    try {',
+      '      const fresh = await fetch(e.request);',
+      '      const cache = await caches.open(CACHE);',
+      '      cache.put(e.request, fresh.clone());',
+      '      return fresh;',
+      '    } catch (err) {',
+      '      const cached = await caches.match(e.request);',
+      '      if (cached) return cached;',
+      '      throw err;',
+      '    }',
+      '  })());',
+      '});',
+    ].join('\n');
     var blob = new Blob([swCode], {type: 'application/javascript'});
     var url = URL.createObjectURL(blob);
     navigator.serviceWorker.register(url).catch(function(){});
