@@ -2174,8 +2174,19 @@ function startRoutine(routineId) {
 
 function loadTask(index) {
   const r = routines.find(x => x.id === timerState.routineId);
-  const ordered = timerState.orderedTasks || getOrderedTasks(timerState.routineId);
-  if (!r || index >= ordered.length) {
+  let ordered = timerState.orderedTasks || (r ? getOrderedTasks(timerState.routineId) : null);
+  // 保存されたタスク一覧が壊れている（中身が欠けている）場合はルーティンから作り直す
+  if (r && (!ordered || !ordered[index] || !ordered[index].task)) {
+    ordered = getOrderedTasks(timerState.routineId);
+    timerState.orderedTasks = ordered;
+  }
+  if (!r || !ordered || index >= ordered.length) {
+    finishRoutine();
+    return;
+  }
+  // 念のため、壊れたエントリは飛ばして次の有効なタスクへ
+  while (index < ordered.length && (!ordered[index] || !ordered[index].task)) index++;
+  if (index >= ordered.length) {
     finishRoutine();
     return;
   }
