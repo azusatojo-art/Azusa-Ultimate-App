@@ -621,6 +621,9 @@
       <span style="font-size:12px;color:var(--text3)">合計</span>
       <span id="time-summary-text" style="font-size:14px;font-weight:600;color:var(--text)"></span>
     </div>
+
+    <!-- 一旦終わる（やったぶんは記録に残してホームへ。次は続きから始められる） -->
+    <button onclick="endRoutineForNow()" style="width:100%;margin-top:16px;padding:12px;border-radius:10px;border:0.5px solid var(--border2);background:transparent;color:var(--text2);font-size:14px;font-weight:600;cursor:pointer">⏹ 一旦終わる（記録は残る）</button>
   </div>
 </div>
 
@@ -2671,6 +2674,21 @@ function exitTimer() {
   stopOverrunTimer();
   stopIdleTimer();
   timerState.running = false;
+  showView('home');
+}
+
+// 一旦終わる：やったぶんは記録に残し、タイマーを片付けてホームへ。
+// 今日やったタスクは記憶されるので、同じルーティンを ▶ で始め直すと続きから再開できる。
+function endRoutineForNow() {
+  if (timerState.interval) clearInterval(timerState.interval);
+  stopOverrunTimer();
+  stopIdleTimer();
+  removeElapsedNotify();
+  timerState.running = false;
+  try { persistSession(); } catch(e) {} // 進んだぶんをログに保存
+  if (typeof hideMiniTimerBar === 'function') hideMiniTimerBar();
+  if (typeof clearTimerState === 'function') clearTimerState();
+  timerState.routineId = null;
   showView('home');
 }
 
