@@ -312,6 +312,13 @@
   .cal-event-title { font-size:15px; font-weight:600; color:var(--text); }
   .cal-event-depart { margin-top:6px; font-size:13px; font-weight:600; color:#e74c3c; background:rgba(231,76,60,0.1); border-radius:8px; padding:5px 10px; display:inline-block; }
   .cal-event-location { font-size:12px; color:var(--accent); margin-top:3px; }
+
+  /* 押した感触（タップで少し縮む） */
+  button { transition: transform 0.08s ease; }
+  button:active { transform: scale(0.92); }
+  /* 完了ボタンを押した時の合図 */
+  @keyframes taskDonePulse { 0%{transform:scale(1)} 40%{transform:scale(1.18);background:var(--accent);color:#fff} 100%{transform:scale(1)} }
+  .task-done-pulse { animation: taskDonePulse 0.45s ease; }
 </style>
 </head>
 <body>
@@ -549,10 +556,11 @@
     </div>
 
     <!-- コントロール -->
-    <div style="display:flex;gap:16px;align-items:center;margin-bottom:16px">
-      <button onclick="skipTask()" style="width:52px;height:52px;border-radius:50%;border:0.5px solid var(--border2);background:var(--card);color:var(--text2);font-size:20px;cursor:pointer">⏭</button>
+    <div style="display:flex;gap:14px;align-items:center;margin-bottom:16px">
+      <button id="prev-task-btn" onclick="prevTask()" style="display:none;width:52px;height:52px;border-radius:50%;border:0.5px solid var(--border2);background:var(--card);color:var(--text2);font-size:20px;cursor:pointer" title="前のタスクへ">⏮</button>
+      <button onclick="skipTask()" style="width:52px;height:52px;border-radius:50%;border:0.5px solid var(--border2);background:var(--card);color:var(--text2);font-size:20px;cursor:pointer" title="次のタスクへ（スキップ）">⏭</button>
       <button id="play-pause-btn" onclick="togglePlayPause()" style="width:68px;height:68px;border-radius:50%;border:none;background:var(--text);color:var(--bg);font-size:26px;cursor:pointer;display:flex;align-items:center;justify-content:center">▶</button>
-      <button onclick="completeTask()" style="width:52px;height:52px;border-radius:50%;border:0.5px solid var(--border2);background:var(--card);color:var(--accent);font-size:22px;cursor:pointer">✓</button>
+      <button id="complete-task-btn" onclick="completeTask()" style="width:52px;height:52px;border-radius:50%;border:0.5px solid var(--border2);background:var(--card);color:var(--accent);font-size:22px;cursor:pointer" title="このタスク完了">✓</button>
     </div>
 
     <!-- 次のタスク -->
@@ -2406,6 +2414,9 @@ function addTime(sec) {
 }
 
 function completeTask() {
+  // 押した合図（ぴょこっと光る）
+  var _cb = document.getElementById('complete-task-btn');
+  if (_cb) { _cb.classList.remove('task-done-pulse'); void _cb.offsetWidth; _cb.classList.add('task-done-pulse'); }
   if (timerState.interval) clearInterval(timerState.interval);
   stopOverrunTimer();
   removeElapsedNotify();
