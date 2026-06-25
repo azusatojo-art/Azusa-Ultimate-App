@@ -569,6 +569,9 @@
       <div id="next-up-name" style="font-size:14px;font-weight:500;color:var(--text)">—</div>
     </div>
 
+    <!-- このタスクのメモ -->
+    <textarea id="task-memo-input" oninput="onTaskMemoInput(this.value)" placeholder="📝 このタスクのメモ（何やった・反省・感想…）" style="width:100%;min-height:42px;border:0.5px solid var(--border2);border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.6;background:var(--bg2);color:var(--text);margin-bottom:12px;resize:vertical;font-family:inherit"></textarea>
+
     <!-- 全体終了時間 -->
     <div style="display:flex;gap:16px;margin-bottom:12px;font-size:12px;color:var(--text3)">
       <span>全体終了 <strong id="routine-end-time" style="color:var(--text);font-size:14px">—</strong></span>
@@ -2159,6 +2162,7 @@ function startRoutine(routineId) {
   timerState.completedTasks = 0;
   timerState.sessionStart = Date.now();
   timerState.taskLogs = [];
+  timerState.taskMemos = {}; // タスクごとのメモ（taskIndex => テキスト）
   timerState.taskStartTime = null;
   timerState.orderedTasks = getOrderedTasks(routineId);
   if (timerState.interval) clearInterval(timerState.interval);
@@ -2233,6 +2237,10 @@ function loadTask(index) {
   _set('next-up-name', (next && next.task) ? next.task.name : 'ルーティン終了！');
   var nextBox = document.getElementById('next-up-box');
   if (nextBox) nextBox.style.display = next ? 'block' : 'none';
+
+  // このタスクのメモを読み込む
+  var memoEl = document.getElementById('task-memo-input');
+  if (memoEl) memoEl.value = (timerState.taskMemos && timerState.taskMemos[index]) || '';
 
   updateTimerDisplay();
   renderMiniList();
@@ -2413,6 +2421,11 @@ function addTime(sec) {
   updateTimerDisplay();
 }
 
+function onTaskMemoInput(v) {
+  if (!timerState.taskMemos) timerState.taskMemos = {};
+  timerState.taskMemos[timerState.taskIndex] = v;
+}
+
 function completeTask() {
   // 押した合図（ぴょこっと光る）
   var _cb = document.getElementById('complete-task-btn');
@@ -2433,6 +2446,7 @@ function completeTask() {
     start: timerState.taskStartTime ? timerState.taskStartTime.toISOString() : null,
     end: endTime.toISOString(),
     skipped: false,
+    memo: (timerState.taskMemos && timerState.taskMemos[timerState.taskIndex]) || '',
   });
 
   if (!todayProgress[timerState.routineId]) todayProgress[timerState.routineId] = [];
@@ -2474,6 +2488,7 @@ function skipTask() {
     start: timerState.taskStartTime ? timerState.taskStartTime.toISOString() : null,
     end: new Date().toISOString(),
     skipped: true,
+    memo: (timerState.taskMemos && timerState.taskMemos[timerState.taskIndex]) || '',
   });
   persistSession();
   if (timerState.taskIndex + 1 >= ordered4.length) {
@@ -4259,7 +4274,7 @@ function renderLog() {
   logs.forEach(function(l) {
     (l.taskLogs || []).forEach(function(t) {
       if (!t.skipped) {
-        allEntries.push({ type:'task', time:t.start, endTime:t.end, name:t.name });
+        allEntries.push({ type:'task', time:t.start, endTime:t.end, name:t.name, memo:t.memo });
       }
     });
   });
@@ -4332,12 +4347,15 @@ function renderLog() {
       } else if (e.type === 'exercise' && e.id != null) {
         editBtn = '<button onclick="openEditExercise(\'' + e.id + '\')" style="' + ebStyle + '">✏️</button>';
       }
+      var memoHtml = (e.memo && String(e.memo).trim())
+        ? '<div style="margin:2px 0 6px 98px;font-size:12px;color:var(--text2);background:var(--bg2);border-radius:8px;padding:6px 10px;white-space:pre-wrap">📝 ' + _escMemo(e.memo) + '</div>'
+        : '';
       return '<div style="display:flex;align-items:baseline;gap:10px;padding:5px 0;border-bottom:0.5px solid var(--border)">' +
         '<span style="font-size:12px;color:var(--text3);min-width:88px;flex-shrink:0;font-variant-numeric:tabular-nums">' + timeStr + '</span>' +
         '<span style="font-size:11px;flex-shrink:0;color:' + color + '">' + icon + '</span>' +
         '<span style="font-size:13px;color:var(--text);flex:1">' + e.name + '</span>' +
         editBtn +
-      '</div>';
+      '</div>' + memoHtml;
     }).join('');
 
     var copyBtns = ['朝','昼','夜','全部'].map(function(b) {
@@ -4572,6 +4590,7 @@ function saveTimerState() {
     sessionStart: timerState.sessionStart,
     completedTasks: timerState.completedTasks,
     taskLogs: timerState.taskLogs,
+    taskMemos: timerState.taskMemos,
     taskStartTime: timerState.taskStartTime ? timerState.taskStartTime.toISOString() : null,
     orderedTasks: timerState.orderedTasks,
     savedAt: Date.now()
@@ -4909,6 +4928,7 @@ loadNowTracking();
     timerState.sessionStart = saved.sessionStart;
     timerState.completedTasks = saved.completedTasks;
     timerState.taskLogs = saved.taskLogs || [];
+    timerState.taskMemos = saved.taskMemos || {};
     timerState.taskStartTime = saved.taskStartTime ? new Date(saved.taskStartTime) : null;
     timerState.orderedTasks = saved.orderedTasks;
     var ordered = saved.orderedTasks;
