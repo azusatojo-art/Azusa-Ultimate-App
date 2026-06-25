@@ -4498,6 +4498,20 @@ function inlineDeleteEntry(type, id, meal) {
   renderLog();
 }
 
+// ログのタスク行に、後から感想・メモを書く（開始時刻＋名前で該当タスクを特定）
+function updateTaskMemo(tstart, tname, memo) {
+  for (var i = 0; i < logs.length; i++) {
+    var tl = logs[i].taskLogs || [];
+    for (var j = 0; j < tl.length; j++) {
+      if (tl[j].start === tstart && tl[j].name === tname) {
+        tl[j].memo = memo;
+        saveData(); // logs を保存＋クラウド同期
+        return;
+      }
+    }
+  }
+}
+
 // 日ごとの自由メモ（Notion的なメモを書ける）
 function getDayMemo(day) { return localStorage.getItem('azusa_daymemo_' + day) || ''; }
 function saveDayMemo(day, text) {
@@ -4617,14 +4631,21 @@ function renderLog() {
       var editable = (e.type === 'tracking' && e.id != null) || (e.type === 'food' && e.dayKey) || (e.type === 'exercise' && e.id != null);
 
       if (!editable) {
-        // 読み取り専用（ルーティンのタスクなど）
+        // ルーティンのタスク行：時刻は読み取り専用、感想・メモは直接書ける
         var hhmm = fmtTime(d).replace(':', '');
         var endHhmm = e.endTime ? '~' + fmtTime(new Date(e.endTime)).replace(':', '') : '';
+        var memoField = '';
+        if (e.type === 'task') {
+          var nameArg = String(e.name).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+          memoField = '<input value="' + _escAttr(e.memo || '') + '" placeholder="📝 感想・メモ…" onchange="updateTaskMemo(\'' + e.time + '\',\'' + nameArg + '\', this.value)" style="width:calc(100% - 12px);margin:1px 0 6px 12px;border:none;border-bottom:0.5px dashed var(--border2);background:transparent;color:var(--text2);font-size:12px;padding:4px 2px;outline:none;font-family:inherit">';
+        } else {
+          memoField = memoHtml;
+        }
         return '<div style="display:flex;align-items:baseline;gap:10px;padding:5px 0;border-bottom:0.5px solid var(--border)">' +
           '<span style="font-size:12px;color:var(--text3);min-width:88px;flex-shrink:0;font-variant-numeric:tabular-nums">' + hhmm + endHhmm + '</span>' +
           '<span style="font-size:11px;flex-shrink:0;color:' + color + '">' + icon + '</span>' +
           '<span style="font-size:13px;color:var(--text);flex:1">' + e.name + '</span>' +
-        '</div>' + memoHtml;
+        '</div>' + memoField;
       }
 
       // 直接編集できる行：時刻はインライン入力、✕で削除（ポップアップなし）
