@@ -2198,16 +2198,18 @@ function loadTask(index) {
   timerState.taskStartTime = new Date();
   timerState.overrunSeconds = 0;
 
-  document.getElementById('timer-routine-name').textContent = r.name;
-  document.getElementById('timer-routine-meta').textContent = r.icon + ' ' + r.tasks.length + 'タスク';
-  document.getElementById('task-counter').textContent = (index + 1) + ' / ' + r.tasks.length;
-  document.getElementById('task-name-display').textContent = task.name;
+  // 要素が無くても落ちないように（存在しないIDがあると以降の処理が止まるため）
+  var _set = function(id, v) { var el = document.getElementById(id); if (el) el.textContent = v; };
+  _set('timer-routine-name', r.name);
+  _set('timer-routine-meta', r.icon + ' ' + r.tasks.length + 'タスク');
+  _set('task-counter', (index + 1) + ' / ' + r.tasks.length);
+  _set('task-name-display', task.name);
   // 絵文字表示
   var emojiEl = document.getElementById('task-emoji-display');
   if (emojiEl) emojiEl.textContent = task.emoji || '';
   const startStr = fmtTime(timerState.taskStartTime);
   const endStr = fmtTime(new Date(timerState.taskStartTime.getTime() + task.duration * 60000));
-  document.getElementById('task-note').textContent = (task.note ? task.note + '　' : '') + startStr + ' → ' + endStr;
+  _set('task-note', (task.note ? task.note + '　' : '') + startStr + ' → ' + endStr);
 
   // タイムレンジ（ヘッダー）
   var timeRangeEl = document.getElementById('timer-time-range');
@@ -2220,8 +2222,9 @@ function loadTask(index) {
 
   const ordered2 = timerState.orderedTasks || getOrderedTasks(timerState.routineId);
   const next = ordered2[index + 1];
-  document.getElementById('next-up-name').textContent = next ? next.task.name : 'ルーティン終了！';
-  document.getElementById('next-up-box').style.display = next ? 'block' : 'none';
+  _set('next-up-name', (next && next.task) ? next.task.name : 'ルーティン終了！');
+  var nextBox = document.getElementById('next-up-box');
+  if (nextBox) nextBox.style.display = next ? 'block' : 'none';
 
   updateTimerDisplay();
   renderMiniList();
