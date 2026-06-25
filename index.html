@@ -710,6 +710,7 @@
   <div style="padding:16px 16px 4px">
     <div style="font-size:13px;color:var(--text3);margin-bottom:8px">⏱ タイムトラック</div>
     <div id="log-tracker"></div>
+    <button onclick="openAddTracking()" style="width:100%;margin-top:8px;padding:10px;border-radius:10px;border:0.5px dashed var(--border2);background:transparent;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer">＋ 手入力で記録を追加（あとから足す）</button>
   </div>
   <div id="log-container"></div>
 </div>
@@ -755,7 +756,7 @@
 <!-- 時間記録の編集オーバーレイ -->
 <div class="meds-overlay" id="edit-track-overlay">
   <div class="meds-sheet">
-    <div style="font-size:17px;font-weight:700;margin-bottom:14px">⏱ 記録を編集</div>
+    <div id="edit-track-title" style="font-size:17px;font-weight:700;margin-bottom:14px">⏱ 記録を編集</div>
     <label style="font-size:12px;color:var(--text3)">なに してた？</label>
     <input id="edit-track-name" placeholder="例：Notion整理" style="width:100%;border:0.5px solid var(--border2);border-radius:8px;padding:11px 12px;font-size:15px;background:var(--bg2);color:var(--text);margin:4px 0 12px">
     <label style="font-size:12px;color:var(--text3)">開始</label>
@@ -763,7 +764,7 @@
     <label style="font-size:12px;color:var(--text3)">終了</label>
     <input type="datetime-local" id="edit-track-end" style="width:100%;border:0.5px solid var(--border2);border-radius:8px;padding:11px 12px;font-size:15px;background:var(--bg2);color:var(--text);margin:4px 0 16px">
     <button onclick="saveEditTracking()" style="width:100%;padding:13px;border-radius:8px;background:var(--accent);color:white;border:none;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:8px">保存する</button>
-    <div style="display:flex;gap:8px;margin-bottom:8px">
+    <div id="edit-track-actions" style="display:flex;gap:8px;margin-bottom:8px">
       <button onclick="duplicateEditTracking()" style="flex:1;padding:11px;border-radius:8px;border:0.5px solid var(--border2);background:var(--bg2);color:var(--text);font-size:14px;cursor:pointer">⧉ 複製</button>
       <button onclick="deleteEditTracking()" style="flex:1;padding:11px;border-radius:8px;border:1px solid #e74c3c;background:transparent;color:#e74c3c;font-size:14px;font-weight:600;cursor:pointer">✕ 削除</button>
     </div>
@@ -3984,10 +3985,25 @@ function openEditTracking(id) {
   var item = log.find(function(l) { return String(l.id) === String(id); });
   if (!item) return;
   editingTrackId = item.id;
+  document.getElementById('edit-track-title').textContent = '⏱ 記録を編集';
+  document.getElementById('edit-track-actions').style.display = 'flex';
   document.getElementById('edit-track-name').value = item.name || '';
   document.getElementById('edit-track-start').value = item.start ? toLocalInput(item.start) : '';
   document.getElementById('edit-track-end').value = item.end ? toLocalInput(item.end) : '';
   document.getElementById('edit-track-overlay').classList.add('show');
+}
+// 手入力で過去の記録を新規追加（押し忘れた分などを後から足す）
+function openAddTracking() {
+  editingTrackId = null; // 新規モード
+  document.getElementById('edit-track-title').textContent = '⏱ 記録を追加（手入力）';
+  document.getElementById('edit-track-actions').style.display = 'none'; // 複製/削除は隠す
+  var now = new Date();
+  var start = new Date(now.getTime() - 30 * 60000); // とりあえず30分前〜今で初期表示
+  document.getElementById('edit-track-name').value = '';
+  document.getElementById('edit-track-start').value = toLocalInput(start.toISOString());
+  document.getElementById('edit-track-end').value = toLocalInput(now.toISOString());
+  document.getElementById('edit-track-overlay').classList.add('show');
+  setTimeout(function() { document.getElementById('edit-track-name').focus(); }, 100);
 }
 function closeEditTracking() {
   document.getElementById('edit-track-overlay').classList.remove('show');
@@ -3995,16 +4011,33 @@ function closeEditTracking() {
 }
 function saveEditTracking() {
   var log = ensureTrackingIds();
-  var idx = log.findIndex(function(l) { return String(l.id) === String(editingTrackId); });
-  if (idx < 0) { closeEditTracking(); return; }
-  var name = document.getElementById('edit-track-name').value.trim() || log[idx].name;
+  var name = document.getElementById('edit-track-name').value.trim();
   var startVal = document.getElementById('edit-track-start').value;
   var endVal = document.getElementById('edit-track-end').value;
+
+  if (editingTrackId == null) {
+    // 新規追加モード
+    if (!name) { alert('「なにしてた？」を入れてね'); return; }
+    if (!startVal || !endVal) { alert('開始と終了の時刻を入れてね'); return; }
+    var s = new Date(startVal).toISOString();
+    var e = new Date(endVal).toISOString();
+    if (new Date(e) < new Date(s)) { alert('終了が開始より前になってるよ⏰'); return; }
+    var min = Math.max(1, Math.round((new Date(e) - new Date(s)) / 60000));
+    log.unshift({ id: Date.now(), name: name, start: s, end: e, elapsedMin: min });
+    saveTrackingLog(log);
+    closeEditTracking();
+    renderLog();
+    speak(min + '分、追加したよ！');
+    return;
+  }
+
+  var idx = log.findIndex(function(l) { return String(l.id) === String(editingTrackId); });
+  if (idx < 0) { closeEditTracking(); return; }
   var startIso = startVal ? new Date(startVal).toISOString() : log[idx].start;
   var endIso = endVal ? new Date(endVal).toISOString() : log[idx].end;
   if (new Date(endIso) < new Date(startIso)) { alert('終了が開始より前になってるよ⏰'); return; }
   var elapsed = Math.max(1, Math.round((new Date(endIso) - new Date(startIso)) / 60000));
-  log[idx].name = name;
+  log[idx].name = name || log[idx].name;
   log[idx].start = startIso;
   log[idx].end = endIso;
   log[idx].elapsedMin = elapsed;
