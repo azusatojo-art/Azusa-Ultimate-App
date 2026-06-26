@@ -758,6 +758,10 @@
       </div>
     </div>
   </div>
+  <div style="display:flex;gap:6px;padding:4px 16px 8px">
+    <button id="logview-list" onclick="setLogView('list')" style="flex:1;padding:8px;border-radius:10px;border:1.5px solid var(--accent);background:var(--accent);color:#fff;font-size:12px;font-weight:600;cursor:pointer">📋 リスト</button>
+    <button id="logview-cal" onclick="setLogView('calendar')" style="flex:1;padding:8px;border-radius:10px;border:0.5px solid var(--border2);background:var(--bg2);color:var(--text2);font-size:12px;font-weight:600;cursor:pointer">📅 カレンダー</button>
+  </div>
   <div id="log-container"></div>
 </div>
 
@@ -4543,6 +4547,68 @@ function _escMemo(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// ===== ログのカレンダー表示 =====
+var logView = 'list';
+var calYear = new Date().getFullYear();
+var calMonth = new Date().getMonth();
+var calSelected = null;
+function setLogView(v) {
+  logView = v;
+  var lb = document.getElementById('logview-list'), cb = document.getElementById('logview-cal');
+  if (lb && cb) {
+    var on = function(b){ b.style.background='var(--accent)'; b.style.color='#fff'; b.style.borderColor='var(--accent)'; };
+    var off = function(b){ b.style.background='var(--bg2)'; b.style.color='var(--text2)'; b.style.borderColor='var(--border2)'; };
+    (v==='list'?on:off)(lb); (v==='calendar'?on:off)(cb);
+  }
+  renderLog();
+}
+function calNavMonth(delta) {
+  calMonth += delta;
+  if (calMonth < 0) { calMonth = 11; calYear--; }
+  if (calMonth > 11) { calMonth = 0; calYear++; }
+  calSelected = null;
+  renderLog();
+}
+function calSelectDay(dayKey) { calSelected = dayKey; renderLog(); }
+function renderLogCalendar(byDay, buildDaySection) {
+  var y = calYear, m = calMonth;
+  var startDow = new Date(y, m, 1).getDay();
+  var daysInMonth = new Date(y, m+1, 0).getDate();
+  var t = new Date();
+  var todayKeyStr = t.getFullYear()+'/'+(t.getMonth()+1)+'/'+t.getDate();
+  var dows = ['日','月','火','水','木','金','土'];
+  var html = '<div style="background:var(--card);border:0.5px solid var(--border);border-radius:14px;padding:12px;margin-bottom:14px">';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">' +
+    '<button onclick="calNavMonth(-1)" style="background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer;padding:4px 12px">‹</button>' +
+    '<div style="font-size:14px;font-weight:700">' + y + '年' + (m+1) + '月</div>' +
+    '<button onclick="calNavMonth(1)" style="background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer;padding:4px 12px">›</button>' +
+  '</div>';
+  html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px">' +
+    dows.map(function(dw,i){ return '<div style="text-align:center;font-size:10px;color:' + (i===0?'#e07070':i===6?'#5b8def':'var(--text3)') + '">' + dw + '</div>'; }).join('') +
+  '</div>';
+  html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">';
+  for (var i=0;i<startDow;i++) html += '<div></div>';
+  for (var dnum=1; dnum<=daysInMonth; dnum++) {
+    var key = y+'/'+(m+1)+'/'+dnum;
+    var has = !!byDay[key];
+    var isToday = key === todayKeyStr;
+    var isSel = key === calSelected;
+    var bg = isSel ? 'var(--accent)' : (has ? 'rgba(100,200,120,0.15)' : 'transparent');
+    var col = isSel ? '#fff' : 'var(--text)';
+    var border = isToday ? '1.5px solid var(--accent)' : '1px solid transparent';
+    html += '<div onclick="calSelectDay(\'' + key + '\')" style="aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:8px;cursor:pointer;background:' + bg + ';color:' + col + ';border:' + border + ';font-size:12px">' +
+      '<span>' + dnum + '</span>' +
+      (has && !isSel ? '<span style="width:4px;height:4px;border-radius:50%;background:var(--accent);margin-top:2px"></span>' : '') +
+    '</div>';
+  }
+  html += '</div></div>';
+  var sel = calSelected;
+  if (!sel && y === t.getFullYear() && m === t.getMonth()) sel = todayKeyStr;
+  if (sel) html += buildDaySection(sel);
+  else html += '<div style="text-align:center;color:var(--text3);font-size:13px;padding:16px">日付をタップしてね📅</div>';
+  return html;
+}
+
 function renderLog() {
   renderLogTracker();
   if (typeof updatePomoModeBtns === 'function') updatePomoModeBtns();
@@ -4633,7 +4699,8 @@ function renderLog() {
     '<div style="display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px">' + chips.map(function(c){ return '<span>' + c + '</span>'; }).join('') + '</div>' +
   '</div>';
 
-  container.innerHTML = summaryHtml + Object.keys(byDay).sort().reverse().map(function(day) {
+  function buildDaySection(day) {
+    if (!byDay[day]) return '<div class="log-day"><div class="log-day-header">' + day + '</div><div style="font-size:13px;color:var(--text3);padding:8px 0">この日は記録なし</div><textarea oninput="saveDayMemo(\'' + day + '\', this.value)" placeholder="📝 メモ…" style="width:100%;min-height:46px;border:0.5px solid var(--border2);border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.7;background:var(--bg2);color:var(--text);margin-top:8px;resize:vertical;font-family:inherit">' + _escMemo(getDayMemo(day)) + '</textarea></div>';
     // 時系列（早い順）に並べる。時刻が不正なものは最後に回す
     var entries = byDay[day].sort(function(a,b){
       var ta = new Date(a.time).getTime(); var tb = new Date(b.time).getTime();
@@ -4701,7 +4768,13 @@ function renderLog() {
       '<textarea oninput="saveDayMemo(\'' + day + '\', this.value)" placeholder="📝 メモ…（自由に書けるよ。チェックは [ ] でも）" style="width:100%;min-height:46px;border:0.5px solid var(--border2);border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.7;background:var(--bg2);color:var(--text);margin-bottom:12px;resize:vertical;font-family:inherit">' + _escMemo(getDayMemo(day)) + '</textarea>' +
       '<div>' + rows + '</div>' +
     '</div>';
-  }).join('');
+  }
+
+  if (logView === 'calendar') {
+    container.innerHTML = summaryHtml + renderLogCalendar(byDay, buildDaySection);
+  } else {
+    container.innerHTML = summaryHtml + Object.keys(byDay).sort().reverse().map(buildDaySection).join('');
+  }
 }
 
 function copyNotionLog(day, block) {
