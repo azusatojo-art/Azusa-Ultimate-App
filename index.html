@@ -448,10 +448,13 @@
     <div class="dash-card" onclick="openCycleTracker()">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <div class="dash-label">妊活・生理トラッカー</div>
-        <button onclick="event.stopPropagation();openCycleLog()" style="font-size:11px;color:var(--pink, #d4537e);background:none;border:none;cursor:pointer;font-weight:600">記録</button>
+        <div style="display:flex;align-items:center;gap:12px">
+          <button onclick="event.stopPropagation();openCycleLog()" style="font-size:11px;color:var(--pink, #d4537e);background:none;border:none;cursor:pointer;font-weight:600">記録</button>
+          <button id="cycle-chevron" onclick="toggleCollapse(event,'cycle')" style="background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:2px 4px" title="カレンダーを開く/閉じる">▸</button>
+        </div>
       </div>
       <div id="dash-cycle-info" style="font-size:13px;color:var(--text)">読み込み中...</div>
-      <div id="dash-cycle-calendar" style="display:flex;gap:4px;margin-top:10px;overflow-x:auto;padding-bottom:4px"></div>
+      <div id="dash-cycle-calendar" style="display:none;gap:4px;margin-top:10px;overflow-x:auto;padding-bottom:4px"></div>
     </div>
   </div>
   <div class="home-module" data-block="frog" style="padding: 0 12px 8px">
@@ -478,8 +481,11 @@
   </div>
   <div class="home-module" data-block="hormone" style="padding: 0 12px 8px">
     <div class="dash-card" id="dash-hormone-card">
-      <div class="dash-label" style="margin-bottom:6px">今日のホルモン予報</div>
-      <div id="dash-hormone-content">読み込み中...</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <div class="dash-label" style="margin:0">今日のホルモン予報</div>
+        <button id="hormone-chevron" onclick="toggleCollapse(event,'hormone')" style="background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:2px 4px" title="開く/閉じる">▸</button>
+      </div>
+      <div id="dash-hormone-content" style="display:none">読み込み中...</div>
     </div>
   </div>
   <!-- クイック記録ボタン -->
@@ -1912,6 +1918,26 @@ function updateGoalDisplay() {
   el.innerHTML = html;
 }
 
+// ===== 生理カレンダー・ホルモン予報の開閉（普段は閉じてコンパクト） =====
+function toggleCollapse(ev, which) {
+  if (ev) ev.stopPropagation();
+  var key = 'azusa_' + which + '_open';
+  localStorage.setItem(key, localStorage.getItem(key) === '1' ? '0' : '1');
+  applyCollapse();
+}
+function applyCollapse() {
+  var cycOpen = localStorage.getItem('azusa_cycle_open') === '1';
+  var cal = document.getElementById('dash-cycle-calendar');
+  if (cal) cal.style.display = cycOpen ? 'flex' : 'none';
+  var cycChev = document.getElementById('cycle-chevron');
+  if (cycChev) cycChev.textContent = cycOpen ? '▾' : '▸';
+  var horOpen = localStorage.getItem('azusa_hormone_open') === '1';
+  var hor = document.getElementById('dash-hormone-content');
+  if (hor) hor.style.display = horOpen ? 'block' : 'none';
+  var horChev = document.getElementById('hormone-chevron');
+  if (horChev) horChev.textContent = horOpen ? '▾' : '▸';
+}
+
 function updateDashboard() {
   updateGoalDisplay();
   updateCycleDashboard();
@@ -1919,6 +1945,7 @@ function updateDashboard() {
   updateMedsDashboard();
   updateCoffeeDashboard();
   renderFrogList();
+  applyCollapse();
 
   var all = getBodyStats();
   var keys = Object.keys(all).sort();
